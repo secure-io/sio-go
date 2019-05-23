@@ -18,8 +18,8 @@ Ideally provide a code snippet that shows the bug.
 
 #### Additional context
 
-**What version of Go are you using (`go version`)?**
+1. What version of Go are you using (`go version`)?
 
-**What operating system and processor architecture are you using (`go env`)?**
+2. What operating system and processor architecture are you using (`go env`)?
 
-**Anything else that is important?**
+3. Anything else that is important?
