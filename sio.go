@@ -1,3 +1,9 @@
+// Copyright (c) 2019 Andreas Auernhammer. All rights reserved.
+// Use of this source code is governed by a license that can be
+// found in the LICENSE file.
+
+// Package sio implements a provable secure authenticated encryption
+// scheme for continuous byte streams.
 package sio
 
 import (
@@ -72,7 +78,7 @@ func NewStream(cipher cipher.AEAD, bufSize int) *Stream {
 	}
 }
 
-// A Stream encrypts or decrypts continous byte streams.
+// A Stream encrypts or decrypts continuous byte streams.
 type Stream struct {
 	cipher  cipher.AEAD
 	bufSize int
