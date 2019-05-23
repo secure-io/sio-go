@@ -1,0 +1,23 @@
+go_import_path: github.com/secure-io/sio
+
+language: go
+
+branches:
+    only:
+        - master
+
+go:
+  - "1.11.x"  
+  - "1.12.x"
+
+env:
+    - ARCH=x86_64
+ 
+before_script:
+    - export GO111MODULE=on
+
+script:
+    - diff -au <(gofmt -d .) <(printf "")
+    - diff -au <(go vet .) <(printf "")
+    - go test
+    - go test -sio.BufSize=23 -sio.PlaintextSize=1825
