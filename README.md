@@ -5,10 +5,10 @@
 
 # Secure IO
 
-The `sio` package implements provable secure authenticated encryption for continuous data streams.  
-It splits a data stream into `L` bytes long fragments and en/decrypts each fragement with an unqiue
+The `sio` package implements provable secure authenticated encryption for continuous byte streams.  
+It splits a data stream into `L` bytes long fragments and en/decrypts each fragment with an unqiue
 key-nonce combination using the *AEAD*. For the last fragment the construction prefixes the associated
-data with the `0x80` byte to prevent truncation attacks. 
+data with the `0x80` byte (instead of `0x00`) to prevent truncation attacks. 
 
 ![`sio` encryption scheme](https://github.com/secure-io/sio/blob/master/img/channel_construction.svg)
 
