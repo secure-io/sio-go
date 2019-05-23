@@ -5,7 +5,7 @@
 
 # Secure IO
 
-The `sio` package implements provable secure authenticated encryption for continous data streams.
+The `sio` package implements provable secure authenticated encryption for continuous data streams.
 
 ```
 package main
@@ -84,8 +84,10 @@ import (
 ### Why use `sio`?
 
 TL;DR:
-    - AEAD : authenticated encryption with associated data for single messages.
-    - `sio`: authenticated encryption with associated data for data streams.
+```
+    AEAD: authenticated encryption with associated data for single messages.
+    sio : authenticated encryption with associated data for data streams.
+```
 
 Roughly speaking, you cannot really encrypt something with e.g. AES - [AES](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) is a block cipher
 and can only en/decrypt 128 bit blocks. To encrypt data with AES you have to use it in an [operation mode](https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation)
