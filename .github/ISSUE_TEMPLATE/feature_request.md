@@ -11,7 +11,6 @@ assignees: ''
 <!-- And how does it affect you? -->
 
 #### How do you want to solve it?
-<!-- If yes, which part of the API? -->
 
 #### Additional context
 
