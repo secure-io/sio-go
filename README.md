@@ -7,8 +7,9 @@
 
 The `sio` package implements provable secure authenticated encryption for continuous byte streams.  
 It splits a data stream into `L` bytes long fragments and en/decrypts each fragment with an unqiue
-key-nonce combination using the *AEAD*. For the last fragment the construction prefixes the associated
-data with the `0x80` byte (instead of `0x00`) to prevent truncation attacks. 
+key-nonce combination using an [AEAD](https://golang.org/pkg/crypto/cipher/#AEAD). For the last 
+fragment the construction prefixes the associated data with the `0x80` byte (instead of `0x00`)
+to prevent truncation attacks. 
 
 ![`sio` encryption scheme](https://github.com/secure-io/sio/blob/master/img/channel_construction.svg)
 
