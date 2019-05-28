@@ -19,5 +19,5 @@ before_script:
 script:
     - diff -au <(gofmt -d .) <(printf "")
     - diff -au <(go vet .) <(printf "")
-    - go test
-    - go test -sio.BufSize=23 -sio.PlaintextSize=1825
+    - go test ./...
+    - go test -sio.BufSize=23 -sio.PlaintextSize=1825 ./...
