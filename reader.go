@@ -363,20 +363,20 @@ func (r *DecReader) readFragment(p []byte, firstReadOffset int) (int, error) {
 		if len(p) < r.bufSize {
 			r.plaintextBuffer, err = r.cipher.Open(r.buffer[:0], r.nonce, r.buffer[:ciphertextLen], r.associatedData)
 			if err != nil {
-				r.err = ErrAuth
+				r.err = NotAuthentic
 				return 0, r.err
 			}
 			r.offset = copy(p, r.plaintextBuffer)
 			return r.offset, nil
 		}
 		if _, err = r.cipher.Open(p[:0], r.nonce, r.buffer[:ciphertextLen], r.associatedData); err != nil {
-			r.err = ErrAuth
+			r.err = NotAuthentic
 			return 0, r.err
 		}
 		return r.bufSize, nil
 	case err == io.EOF:
 		if firstReadOffset+n < r.cipher.Overhead() {
-			r.err = ErrAuth
+			r.err = NotAuthentic
 			return 0, r.err
 		}
 		r.closed = true
@@ -384,14 +384,14 @@ func (r *DecReader) readFragment(p []byte, firstReadOffset int) (int, error) {
 		if len(p) < firstReadOffset+n-r.cipher.Overhead() {
 			r.plaintextBuffer, err = r.cipher.Open(r.buffer[:0], r.nonce, r.buffer[:firstReadOffset+n], r.associatedData)
 			if err != nil {
-				r.err = ErrAuth
+				r.err = NotAuthentic
 				return 0, r.err
 			}
 			r.offset = copy(p, r.plaintextBuffer)
 			return r.offset, nil
 		}
 		if _, err = r.cipher.Open(p[:0], r.nonce, r.buffer[:firstReadOffset+n], r.associatedData); err != nil {
-			r.err = ErrAuth
+			r.err = NotAuthentic
 			return 0, r.err
 
 		}
