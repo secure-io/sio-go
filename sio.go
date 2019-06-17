@@ -21,37 +21,23 @@ const (
 	BufSize = 1 << 14
 )
 
-var (
-	// ErrAuth is returned when the decryption of a data stream fails.
-	// It indicates that the data is not authentic (e.g. malisously
-	// modified).
-	ErrAuth = errAuth{}
+const (
+	// NotAuthentic is returned when the decryption of a data stream fails.
+	// It indicates that the data is not authentic - e.g. malisously modified.
+	NotAuthentic errorType = "data is not authentic"
 
 	// ErrExceeded is returned when no more data can be encrypted /
 	// decrypted securely. It indicates that the data stream is too
 	// large to be encrypted / decrypted with a single key-nonce
 	// combination.
-	ErrExceeded = errExceeded{}
+	//
+	// For BufSize this will happen after processing ~64 TiB.
+	ErrExceeded errorType = "data limit exceeded"
 )
 
-// The following error type construction prevents assigning new values to
-// ErrAuth or ErrExceeded. In particular it prevents client code from doing
-// shady things like:
-//
-//   `sio.ErrAuth = nil` or `sio.ErrAuth = sio.ErrExceeded`
-//
-// In contrast you could write e.g. `io.EOF = nil` which will most likely break
-// any I/O code in horrible ways.
+type errorType string
 
-type errType struct{ _ int }
-
-type errAuth errType
-
-func (errAuth) Error() string { return "sio: authentication failed" }
-
-type errExceeded errType
-
-func (errExceeded) Error() string { return "sio: data limit exceeded" }
+func (e errorType) Error() string { return string(e) }
 
 // NewStream creates a new Stream that encrypts or decrypts data
 // streams with the cipher. If you don't have special requirements
