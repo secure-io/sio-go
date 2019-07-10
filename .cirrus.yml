@@ -3,19 +3,15 @@ task:
       - name: linux
         container:
            image: golang:latest
-      
-      - name: macOS
-        osx_instance:
-           image: mojave-base
-        install_script: brew install go
-
   
    modules_cache:
        fingerprint_script: cat go.sum
        folder: $GOPATH/pkg/mod
-   fmt_script: diff -au <(gofmt -d .) <(printf "")
-   vet_script: diff -au <(go vet .) <(printf "")
-   get_script: go get ./...
-   build_script: go build ./...
+   check_script: 
+       - diff -au <(gofmt -d .) <(printf "")
+       - diff -au <(go vet .) <(printf "")
+   get_script:
+      - go get ./...
+      - go build ./...
    test_script: go test ./...
      
