@@ -7,8 +7,7 @@ task:
       - name: macOS
         osx_instance:
            image: mojave-base
-        container:
-           image: golang:latest
+        install_script: brew install go
 
   
    modules_cache:
