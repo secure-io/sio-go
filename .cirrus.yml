@@ -3,11 +3,6 @@ task:
       - name: linux
         container:
            image: golang:latest
-      
-      - name: linux (unstable)
-        container:
-           image: golang:rc
-
   
    modules_cache:
        fingerprint_script: cat go.sum
