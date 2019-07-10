@@ -7,15 +7,22 @@ task:
       - name: macOS
         osx_instance:
            image: mojave-base
-        install_script: brew install go
+        env:
+           VERSION: 1.12.7
+           PATH: /usr/local/go/bin:${PATH}
+        install_script:
+           - rm -rfv /usr/local/go
+           - curl https://dl.google.com/go/go${VERSION}.darwin-amd64.tar.gz | tar -xz -C /usr/local
 
   
    modules_cache:
        fingerprint_script: cat go.sum
        folder: $GOPATH/pkg/mod
-   fmt_script: diff -au <(gofmt -d .) <(printf "")
-   vet_script: diff -au <(go vet .) <(printf "")
+   check_script: 
+       - diff -au <(gofmt -d .) <(printf "")
+       - diff -au <(go vet .) <(printf "")
    get_script: go get ./...
-   build_script: go build ./...
+      - go get ./...
+      - go build ./...
    test_script: go test ./...
      
