@@ -1,5 +1,5 @@
 [![Godoc Reference](https://godoc.org/github.com/secure-io/sio-go?status.svg)](https://godoc.org/github.com/secure-io/sio-go)
-[![Build Status](https://travis-ci.org/secure-io/sio-go.svg?branch=master)](https://travis-ci.org/secure-io/sio-go)
+[![Build Status](https://api.cirrus-ci.com/github/secure-io/sio-go.svg?branch=master)](https://cirrus-ci.com/github/secure-io/sio-go)
 
 # Secure IO
 
