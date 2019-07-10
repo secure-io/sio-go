@@ -4,13 +4,9 @@ task:
         container:
            image: golang:latest
       
-      - name: linux (1.12.7)
-        env:
-           VERSION: 1.12.7
-           PATH: /usr/local/go/bin:${PATH}
-        install_script:
-           - rm -rfv /usr/local/go
-           - curl https://dl.google.com/go/go$VERSION.linux-amd64.tar.gz | tar -xz -C /usr/local
+      - name: linux (unstable)
+        container:
+           image: golang:rc
 
   
    modules_cache:
