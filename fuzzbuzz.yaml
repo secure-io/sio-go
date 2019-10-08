@@ -5,6 +5,7 @@ targets:
     version: "1.11"
     harness:
       function: Fuzz
+      build_tags: gofuzz
       # package defines where to import FuzzerEntrypoint from
       package: github.com/secure-io/sio-go
       # the repository will be cloned to
