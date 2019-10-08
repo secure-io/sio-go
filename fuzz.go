@@ -14,11 +14,24 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sync"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
-var stream *Stream
+var BufferPool = sync.Pool{
+	New: func() interface{} {
+		return bytes.NewBuffer(nil)
+	},
+}
+
+var (
+	wStream *Stream
+	rStream *Stream
+)
 
 func init() {
+	// AES-128-GCM
 	key := make([]byte, 16)
 	_, err := io.ReadFull(rand.Reader, key)
 	if err != nil {
@@ -32,63 +45,236 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	stream = NewStream(gcm, BufSize)
-}
+	rStream = NewStream(gcm, BufSize)
 
-func Fuzz(data []byte) int {
-	nonce := make([]byte, stream.NonceSize())
-	_, err := io.ReadFull(rand.Reader, nonce)
+	// ChaCha20-Poly1305
+	key = make([]byte, 32)
+	_, err = io.ReadFull(rand.Reader, key)
 	if err != nil {
 		panic(err)
 	}
-
-	plaintext := bytes.NewBuffer(make([]byte, 0, len(data)))
-	var r io.Reader = stream.DecryptReader(stream.EncryptReader(bytes.NewReader(data), nonce, data), nonce, data)
-	var w io.WriteCloser = stream.EncryptWriter(stream.DecryptWriter(plaintext, nonce, data), nonce, data)
-	if _, err = io.Copy(w, r); err != nil {
+	c20p1305, err := chacha20poly1305.New(key)
+	if err != nil {
 		panic(err)
 	}
-	if err = w.Close(); err != nil {
+	wStream = NewStream(c20p1305, BufSize)
+}
+
+func FuzzAll(data []byte) int {
+	v := FuzzReader(data)
+	v += FuzzReaderAt(data)
+	v += FuzzWriteTo(data)
+	v += FuzzWrite(data)
+	v += FuzzReadFrom(data)
+	return v
+}
+
+func FuzzReader(data []byte) int {
+	nonce := make([]byte, rStream.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		panic(err)
+	}
+
+	plaintext := BufferPool.Get().(*bytes.Buffer)
+	defer BufferPool.Put(plaintext)
+	ciphertext := BufferPool.Get().(*bytes.Buffer)
+	defer BufferPool.Put(ciphertext)
+
+	plaintext.Reset()
+	dec := rStream.DecryptReader(rStream.EncryptReader(bytes.NewReader(data), nonce, data), nonce, data)
+	if n, err := copyBuffer(plaintext, dec, make([]byte, 32*1024)); int(n) != len(data) || err != nil {
+		panic(fmt.Sprintf("N: %d, Err: %v", n, err))
 	}
 	if !bytes.Equal(plaintext.Bytes(), data) {
-		panic("en/decryption chain produces different plaintext")
+		panic("plaintext does not match origin data")
+	}
+
+	ciphertext.Reset()
+	enc := rStream.EncryptReader(bytes.NewReader(data), nonce, data)
+	if _, err := copyBuffer(ciphertext, enc, make([]byte, 32*1024)); err != nil {
+		panic(err)
 	}
 
 	plaintext.Reset()
-	r = stream.DecryptReader(stream.EncryptReader(bytes.NewReader(data), nonce, data), nonce, data)
-	w = stream.EncryptWriter(stream.DecryptWriter(plaintext, nonce, data), nonce, data)
-	if _, err = copyBuffer(w, r, make([]byte, 2*BufSize+1)); err != nil {
-		panic(err)
-	}
-	if err = w.Close(); err != nil {
+	dec = rStream.DecryptReader(bytes.NewReader(ciphertext.Bytes()), nonce, data)
+	if _, err := copyBuffer(plaintext, enc, make([]byte, 32*1024)); err != nil {
 		panic(err)
 	}
 	if !bytes.Equal(plaintext.Bytes(), data) {
-		panic("en/decryption chain produces different plaintext")
+		panic("plaintext does not match origin data")
+	}
+
+	dec = rStream.DecryptReader(bytes.NewReader(data), nonce, data)
+	if n, err := copyBuffer(ioutil.Discard, dec, make([]byte, 32*1024)); n != 0 || err != NotAuthentic {
+		panic(fmt.Sprintf("N: %d, Err: %v", n, err))
+	}
+	return 0
+}
+
+func FuzzReaderAt(data []byte) int {
+	nonce := make([]byte, rStream.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		panic(err)
+	}
+
+	plaintext := BufferPool.Get().(*bytes.Buffer)
+	defer BufferPool.Put(plaintext)
+	ciphertext := BufferPool.Get().(*bytes.Buffer)
+	defer BufferPool.Put(ciphertext)
+
+	ciphertext.Reset()
+	enc := rStream.EncryptReader(bytes.NewReader(data), nonce, data)
+	if _, err := copyBuffer(ciphertext, enc, make([]byte, 32*1024)); err != nil {
+		panic(err)
 	}
 
 	plaintext.Reset()
-	r = stream.EncryptReader(bytes.NewReader(data), nonce, data)
-	w = stream.DecryptWriter(plaintext, nonce, data)
-	if _, err = copyBuffer(w, r, make([]byte, 2*BufSize)); err != nil {
-		panic(err)
-	}
-	if err = w.Close(); err != nil {
+	dec := rStream.DecryptReader(bytes.NewReader(ciphertext.Bytes()), nonce, data)
+	if _, err := copyBuffer(plaintext, dec, make([]byte, 32*1024)); err != nil {
 		panic(err)
 	}
 	if !bytes.Equal(plaintext.Bytes(), data) {
-		panic("en/decryption chain produces different plaintext")
+		panic("plaintext does not match origin data")
 	}
 
-	r = stream.DecryptReader(bytes.NewReader(data), nonce, data)
-	if _, err = io.Copy(ioutil.Discard, r); err != NotAuthentic {
+	r := io.NewSectionReader(rStream.DecryptReaderAt(bytes.NewReader(data), nonce, data), 0, int64(len(data)))
+	if n, err := copyBuffer(ioutil.Discard, r, make([]byte, 32*1024)); n != 0 || err != NotAuthentic {
+		panic(fmt.Sprintf("N: %d, Err: %v", n, err))
+	}
+	return 0
+}
+
+func FuzzWriteTo(data []byte) int {
+	nonce := make([]byte, rStream.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		panic(err)
 	}
-	w = stream.DecryptWriter(ioutil.Discard, nonce, data)
-	if _, err = w.Write(data); err != NotAuthentic {
-		if cErr := w.Close(); cErr != NotAuthentic || err != nil {
-			panic(fmt.Sprintf("Write error: %v - Close error: %v", err, cErr))
+
+	plaintext := BufferPool.Get().(*bytes.Buffer)
+	defer BufferPool.Put(plaintext)
+	ciphertext := BufferPool.Get().(*bytes.Buffer)
+	defer BufferPool.Put(ciphertext)
+
+	plaintext.Reset()
+	dec := rStream.DecryptReader(rStream.EncryptReader(bytes.NewReader(data), nonce, data), nonce, data)
+	if n, err := dec.WriteTo(plaintext); int(n) != len(data) || err != nil {
+		panic(fmt.Sprintf("N: %d, Err: %v", n, err))
+	}
+	if !bytes.Equal(plaintext.Bytes(), data) {
+		panic("plaintext does not match origin data")
+	}
+
+	ciphertext.Reset()
+	enc := rStream.EncryptReader(bytes.NewReader(data), nonce, data)
+	if _, err := enc.WriteTo(ciphertext); err != nil {
+		panic(err)
+	}
+
+	plaintext.Reset()
+	dec = rStream.DecryptReader(bytes.NewReader(ciphertext.Bytes()), nonce, data)
+	if _, err := dec.WriteTo(plaintext); err != nil {
+		panic(err)
+	}
+	if !bytes.Equal(plaintext.Bytes(), data) {
+		panic("plaintext does not match origin data")
+	}
+
+	dec = rStream.DecryptReader(bytes.NewReader(data), nonce, data)
+	if n, err := dec.WriteTo(ioutil.Discard); n != 0 || err != NotAuthentic {
+		panic(fmt.Sprintf("N: %d, Err: %v", n, err))
+	}
+	return 0
+}
+
+func FuzzWrite(data []byte) int {
+	nonce := make([]byte, wStream.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		panic(err)
+	}
+
+	plaintext := BufferPool.Get().(*bytes.Buffer)
+	defer BufferPool.Put(plaintext)
+	ciphertext := BufferPool.Get().(*bytes.Buffer)
+	defer BufferPool.Put(ciphertext)
+
+	plaintext.Reset()
+	enc := wStream.EncryptWriter(wStream.DecryptWriter(plaintext, nonce, data), nonce, data)
+	if n, err := copyBuffer(enc, bytes.NewReader(data), make([]byte, 32*1024)); n != int64(len(data)) || err != nil {
+		panic(fmt.Sprintf("N: %d, Err: %v", n, err))
+	}
+	if err := enc.Close(); err != nil {
+		panic(err)
+	}
+
+	ciphertext.Reset()
+	enc = wStream.EncryptWriter(ciphertext, nonce, data)
+	if _, err := copyBuffer(enc, bytes.NewReader(data), make([]byte, 32*1024)); err != nil {
+		panic(err)
+	}
+	if err := enc.Close(); err != nil {
+		panic(err)
+	}
+
+	plaintext.Reset()
+	dec := wStream.DecryptWriter(plaintext, nonce, data)
+	if _, err := copyBuffer(dec, bytes.NewReader(ciphertext.Bytes()), make([]byte, 32*1024)); err != nil {
+		panic(err)
+	}
+	if err := dec.Close(); err != nil {
+		panic(err)
+	}
+
+	dec = wStream.DecryptWriter(ioutil.Discard, nonce, data)
+	if _, err := copyBuffer(dec, bytes.NewReader(data), make([]byte, 32*1024)); err != NotAuthentic {
+		if cErr := dec.Close(); err != nil || cErr != NotAuthentic {
+			panic(fmt.Sprintf("Write: %v, Close: %v", err, cErr))
+		}
+	}
+	return 0
+}
+
+func FuzzReadFrom(data []byte) int {
+	nonce := make([]byte, wStream.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		panic(err)
+	}
+
+	plaintext := BufferPool.Get().(*bytes.Buffer)
+	defer BufferPool.Put(plaintext)
+	ciphertext := BufferPool.Get().(*bytes.Buffer)
+	defer BufferPool.Put(ciphertext)
+
+	plaintext.Reset()
+	enc := wStream.EncryptWriter(wStream.DecryptWriter(plaintext, nonce, data), nonce, data)
+	if n, err := enc.ReadFrom(bytes.NewReader(data)); n != int64(len(data)) || err != nil {
+		panic(fmt.Sprintf("N: %d, Err: %v", n, err))
+	}
+	if err := enc.Close(); err != nil {
+		panic(err)
+	}
+
+	ciphertext.Reset()
+	enc = wStream.EncryptWriter(ciphertext, nonce, data)
+	if _, err := enc.ReadFrom(bytes.NewReader(data)); err != nil {
+		panic(err)
+	}
+	if err := enc.Close(); err != nil {
+		panic(err)
+	}
+
+	plaintext.Reset()
+	dec := wStream.DecryptWriter(plaintext, nonce, data)
+	if _, err := dec.ReadFrom(bytes.NewReader(ciphertext.Bytes())); err != nil {
+		panic(err)
+	}
+	if err := dec.Close(); err != nil {
+		panic(err)
+	}
+
+	dec = wStream.DecryptWriter(ioutil.Discard, nonce, data)
+	if _, err := dec.ReadFrom(bytes.NewReader(data)); err != NotAuthentic {
+		if cErr := dec.Close(); err != nil || cErr != NotAuthentic {
+			panic(fmt.Sprintf("Write: %v, Close: %v", err, cErr))
 		}
 	}
 	return 0
@@ -106,6 +292,10 @@ func copyBuffer(dst io.Writer, src io.Reader, buf []byte) (int64, error) {
 			}
 			if ew != nil {
 				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
 				break
 			}
 		}
