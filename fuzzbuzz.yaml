@@ -6,7 +6,7 @@ targets:
     harness:
       function: Fuzz
       # package defines where to import FuzzerEntrypoint from
-      package: github.com/secure-io/sio
+      package: github.com/secure-io/sio-go
       # the repository will be cloned to
       # $GOPATH/src/github.com/fuzzbuzz/tutorial
       checkout: github.com/secure-io/sio-go
