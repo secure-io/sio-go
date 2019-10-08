@@ -42,7 +42,7 @@ func Fuzz(data []byte) int {
 		panic(err)
 	}
 
-	plaintext := bytes.NewBuffer(data)
+	plaintext := bytes.NewBuffer(make([]byte, 0, len(data)))
 	var r io.Reader = stream.DecryptReader(stream.EncryptReader(bytes.NewReader(data), nonce, data), nonce, data)
 	var w io.WriteCloser = stream.EncryptWriter(stream.DecryptWriter(plaintext, nonce, data), nonce, data)
 	if _, err = io.Copy(w, r); err != nil {
