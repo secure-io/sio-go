@@ -94,13 +94,15 @@ func FuzzReader(data []byte) int {
 	if _, err := copyBuffer(ciphertext, enc, make([]byte, 32*1024)); err != nil {
 		panic(err)
 	}
+	fmt.Println(string(ciphertext.Bytes()))
 
 	plaintext.Reset()
 	dec = rStream.DecryptReader(bytes.NewReader(ciphertext.Bytes()), nonce, data)
-	if _, err := copyBuffer(plaintext, enc, make([]byte, 32*1024)); err != nil {
+	if _, err := copyBuffer(plaintext, dec, make([]byte, 32*1024)); err != nil {
 		panic(err)
 	}
 	if !bytes.Equal(plaintext.Bytes(), data) {
+		fmt.Println(string(plaintext.Bytes()))
 		panic("plaintext does not match origin data")
 	}
 
@@ -137,9 +139,11 @@ func FuzzReaderAt(data []byte) int {
 		panic("plaintext does not match origin data")
 	}
 
-	r := io.NewSectionReader(rStream.DecryptReaderAt(bytes.NewReader(data), nonce, data), 0, int64(len(data)))
-	if n, err := copyBuffer(ioutil.Discard, r, make([]byte, 32*1024)); n != 0 || err != NotAuthentic {
-		panic(fmt.Sprintf("N: %d, Err: %v", n, err))
+	if len(data) > 0 {
+		r := io.NewSectionReader(rStream.DecryptReaderAt(bytes.NewReader(data), nonce, data), 0, int64(len(data)))
+		if n, err := copyBuffer(ioutil.Discard, r, make([]byte, 32*1024)); n != 0 || err != NotAuthentic {
+			panic(fmt.Sprintf("N: %d, Err: %v", n, err))
+		}
 	}
 	return 0
 }
