@@ -1,0 +1,12 @@
+base: ubuntu:16.04
+targets:
+  - name: secure-io
+    language: go
+    version: "1.13"
+    harness:
+      function: Fuzz
+      # package defines where to import FuzzerEntrypoint from
+      package: github.com/secure-io/sio
+      # the repository will be cloned to
+      # $GOPATH/src/github.com/fuzzbuzz/tutorial
+      checkout: github.com/secure-io/sio-go
