@@ -2,7 +2,7 @@ base: ubuntu:16.04
 targets:
   - name: secure-io
     language: go
-    version: "1.13"
+    version: "1.11"
     harness:
       function: Fuzz
       # package defines where to import FuzzerEntrypoint from
