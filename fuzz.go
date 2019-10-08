@@ -94,7 +94,6 @@ func FuzzReader(data []byte) int {
 	if _, err := copyBuffer(ciphertext, enc, make([]byte, 32*1024)); err != nil {
 		panic(err)
 	}
-	fmt.Println(string(ciphertext.Bytes()))
 
 	plaintext.Reset()
 	dec = rStream.DecryptReader(bytes.NewReader(ciphertext.Bytes()), nonce, data)
@@ -102,7 +101,6 @@ func FuzzReader(data []byte) int {
 		panic(err)
 	}
 	if !bytes.Equal(plaintext.Bytes(), data) {
-		fmt.Println(string(plaintext.Bytes()))
 		panic("plaintext does not match origin data")
 	}
 
