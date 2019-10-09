@@ -227,7 +227,7 @@ type DecReader struct {
 // and any error encountered while reading from the underlying
 // io.Reader.
 //
-// When Read fails to decrypt any data returned by the underlying
+// When Read fails to decrypt some data returned by the underlying
 // io.Reader it returns NotAuthentic. This error indicates
 // that the encrypted data has been (maliciously) modified.
 //
@@ -315,7 +315,7 @@ func (r *DecReader) ReadByte() (byte, error) {
 // data to w until either there's no more data to write,
 // an error occurs or the encrypted data is invalid.
 //
-// When WriteTo fails to decrypt the data it returns
+// When WriteTo fails to decrypt some data it returns
 // NotAuthentic. This error indicates that the encrypted
 // bytes has been (maliciously) modified.
 //
@@ -451,7 +451,7 @@ type DecReaderAt struct {
 // io.Reader. When ReadAt returns n < len(p), it returns a non-nil
 // error explaining why more bytes were not returned.
 //
-// When ReadAt fails to decrypt any data returned by the underlying
+// When ReadAt fails to decrypt some data returned by the underlying
 // io.ReaderAt it returns NotAuthentic. This error indicates
 // that the encrypted data has been (maliciously) modified.
 //
