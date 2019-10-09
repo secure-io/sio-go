@@ -4,7 +4,6 @@ targets:
     language: go
     version: "1.11"
     setup:
-      - sudo apt install xxd
       - ./fuzz-corpus.sh
     corpus: ./corpus
     
