@@ -1,13 +1,14 @@
 base: ubuntu:16.04
-language: go
-version: "1.11"
-checkout: github.com/secure-io/sio-go
 targets:
   - name: secure-io
-  - setup:
+    language: go
+    version: "1.11"
+    setup:
       - ./github.com/secure-io/sio-go/fuzz-corpus.sh
-  - corpus: ./corpus
+    corpus: ./corpus
+    
     harness:
       function: FuzzAll
       build_tags: gofuzz
       package: github.com/secure-io/sio-go
+      checkout: github.com/secure-io/sio-go
