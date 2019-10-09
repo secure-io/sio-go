@@ -1,13 +1,13 @@
 base: ubuntu:16.04
+language: go
+version: "1.11"
+checkout: github.com/secure-io/sio-go
 targets:
   - name: secure-io
-    language: go
-    version: "1.11"
+  - setup:
+      - ./github.com/secure-io/sio-go/fuzz-corpus.sh
+  - corpus: ./corpus
     harness:
       function: FuzzAll
       build_tags: gofuzz
-      # package defines where to import FuzzerEntrypoint from
       package: github.com/secure-io/sio-go
-      # the repository will be cloned to
-      # $GOPATH/src/github.com/fuzzbuzz/tutorial
-      checkout: github.com/secure-io/sio-go
