@@ -10,11 +10,12 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"math"
 	"sync"
 )
 
-// EncReader wraps is an io.Reader and encrypts and authenticates everything it
-// reads from it.
+// An EncReader encrypts and authenticates everything it reads
+// from an underlying io.Reader.
 type EncReader struct {
 	r       io.Reader
 	cipher  cipher.AEAD
@@ -33,12 +34,14 @@ type EncReader struct {
 	firstRead, closed bool
 }
 
-// Read behaves like specified by the io.Reader interface.
-// It encryptes and authenticates up to len(p) bytes which it
-// reads from the underlying io.Reader.
+// Read behaves as specified by the io.Reader interface.
+// In particular, Read reads up to len(p) encrypted bytes
+// into p. It returns the number of bytes read (0 <= n <= len(p))
+// and any error encountered while reading from the underlying
+// io.Reader.
 //
-// It returns ErrExceeded when no more data can be encrypted
-// securely.
+// When Read cannot encrypt any more bytes securely it returns
+// ErrExceeded.
 func (r *EncReader) Read(p []byte) (n int, err error) {
 	if r.err != nil {
 		return n, r.err
@@ -68,11 +71,12 @@ func (r *EncReader) Read(p []byte) (n int, err error) {
 	return n + nn, err
 }
 
-// ReadByte reads from the underlying io.Reader and
-// returns one encrypted and authenticated byte.
+// ReadByte behaves as specified by the io.ByteReader
+// interface. In particular, ReadByte returns the next
+// encrypted byte or any error encountered.
 //
-// It returns ErrExceeded when no more bytes can
-// be encrypted securely.
+// When ReadByte cannot encrypt one more byte
+// securely it returns ErrExceeded.
 func (r *EncReader) ReadByte() (byte, error) {
 	if r.err != nil {
 		return 0, r.err
@@ -105,12 +109,12 @@ func (r *EncReader) ReadByte() (byte, error) {
 	return b, nil
 }
 
-// WriteTo keeps reading from the underlying io.Reader
-// until it enounters an error or io.EOF and encrypts
-// and authenticates everything before writting it to w.
-//
-// It returns ErrExceeded when no more data can be encrypted
-// securely.
+// WriteTo behaves as specified by the io.WriterTo
+// interface. In particular, WriteTo writes encrypted
+// data to w until either there's no more data to write,
+// an error occurs or no more data can be encrypted
+// securely. When WriteTo cannot encrypt more data
+// securely it returns ErrExceeded.
 func (r *EncReader) WriteTo(w io.Writer) (int64, error) {
 	var n int64
 	if r.firstRead {
@@ -196,8 +200,9 @@ func (r *EncReader) readFragment(p []byte, firstReadOffset int) (int, error) {
 	}
 }
 
-// DecReader wraps an io.Reader and decrypts and verifies
-// everything it reads from it.
+// A DecReader decrypts and verifies everything it reads
+// from an underlying io.Reader. A DecReader never returns
+// invalid (i.e. not authentic) data.
 type DecReader struct {
 	r      io.Reader
 	cipher cipher.AEAD
@@ -217,12 +222,20 @@ type DecReader struct {
 }
 
 // Read behaves like specified by the io.Reader interface.
-// It decrypts and verifies up to len(p) bytes which it
-// reads from the underlying io.Reader.
+// In particular, Read reads up to len(p) decrypted bytes
+// into p. It returns the number of bytes read (0 <= n <= len(p))
+// and any error encountered while reading from the underlying
+// io.Reader.
 //
-// It returns ErrAuth if the read data is not authentic.
-// It returns ErrExceeded when no more data can be
-// decrypted securely.
+// When Read fails to decrypt any data returned by the underlying
+// io.Reader it returns NotAuthentic. This error indicates
+// that the encrypted data has been (maliciously) modified.
+//
+// When Read cannot decrypt more bytes securely it returns
+// ErrExceeded. However, this can only happen when the
+// underlying io.Reader returns valid but too many
+// encrypted bytes. Therefore, ErrExceeded indicates
+// a misbehaving producer of encrypted data.
 func (r *DecReader) Read(p []byte) (n int, err error) {
 	if r.err != nil {
 		return n, r.err
@@ -252,12 +265,20 @@ func (r *DecReader) Read(p []byte) (n int, err error) {
 	return n + nn, err
 }
 
-// ReadByte reads from the underlying io.Reader and
-// returns one decrypted and verified byte.
+// ReadByte behaves as specified by the io.ByteReader
+// interface. In particular, ReadByte returns the next
+// decrypted byte or any error encountered.
 //
-// It returns ErrAuth if the read data is not authentic.
-// It returns ErrExceeded when no more bytes can be
-// decrypted securely.
+// When ReadByte fails to decrypt the next byte returned by
+// the underlying io.Reader it returns NotAuthentic. This
+// error indicates that the encrypted byte has been
+// (maliciously) modified.
+//
+// When Read cannot decrypt one more byte securely it
+// returns ErrExceeded. However, this can only happen
+// when the underlying io.Reader returns valid but too
+// many encrypted bytes. Therefore, ErrExceeded indicates
+// a misbehaving producer of encrypted data.
 func (r *DecReader) ReadByte() (byte, error) {
 	if r.err != nil {
 		return 0, r.err
@@ -289,13 +310,20 @@ func (r *DecReader) ReadByte() (byte, error) {
 	return b, nil
 }
 
-// WriteTo keeps reading from the underlying io.Reader
-// until it enounters an error or io.EOF and decrypts
-// and verifies everything before writting it to w.
+// WriteTo behaves as specified by the io.WriterTo
+// interface. In particular, WriteTo writes decrypted
+// data to w until either there's no more data to write,
+// an error occurs or the encrypted data is invalid.
 //
-// It returns ErrAuth if the read data is not authentic.
-// It returns ErrExceeded when no more data can be decrypted
-// securely.
+// When WriteTo fails to decrypt the data it returns
+// NotAuthentic. This error indicates that the encrypted
+// bytes has been (maliciously) modified.
+//
+// When WriteTo cannot decrypt any more bytes securely it
+// returns ErrExceeded. However, this can only happen
+// when the underlying io.Reader returns valid but too
+// many encrypted bytes. Therefore, ErrExceeded indicates
+// a misbehaving producer of encrypted data.
 func (r *DecReader) WriteTo(w io.Writer) (int64, error) {
 	var n int64
 	if r.err != nil {
@@ -402,8 +430,9 @@ func (r *DecReader) readFragment(p []byte, firstReadOffset int) (int, error) {
 	}
 }
 
-// DecReader wraps an io.ReaderAt and decrypts and verifies
-// everything it reads from it.
+// A DecReaderAt decrypts and verifies everything it reads
+// from an underlying io.ReaderAt. A DecReaderAt never returns
+// invalid (i.e. not authentic) data.
 type DecReaderAt struct {
 	r      io.ReaderAt
 	cipher cipher.AEAD
@@ -415,20 +444,29 @@ type DecReaderAt struct {
 	associatedData []byte
 }
 
-// ReadAt behaves as specified by the io.ReaderAt interface.
-// It reads len(p) bytes from the underlying io.ReaderAt starting
-// at offset and decrypts and verifies the read data.
+// ReadAt behaves like specified by the io.ReaderAt interface.
+// In particular, ReadAt reads len(p) decrypted bytes into p.
+// It returns the number of bytes read (0 <= n <= len(p))
+// and any error encountered while reading from the underlying
+// io.Reader. When ReadAt returns n < len(p), it returns a non-nil
+// error explaining why more bytes were not returned.
 //
-// It returns ErrAuth if the read data is not authentic.
-// It returns ErrExceeded when no more data can be
-// decrypted securely or the offset excceds the data limit.
+// When ReadAt fails to decrypt any data returned by the underlying
+// io.ReaderAt it returns NotAuthentic. This error indicates
+// that the encrypted data has been (maliciously) modified.
+//
+// When ReadAt cannot decrypt more bytes securely it returns
+// ErrExceeded. However, this can only happen when the
+// underlying io.ReaderAt returns valid but too many
+// encrypted bytes. Therefore, ErrExceeded indicates
+// a misbehaving producer of encrypted data.
 func (r *DecReaderAt) ReadAt(p []byte, offset int64) (int, error) {
 	if offset < 0 {
 		return 0, errors.New("sio: DecReaderAt.ReadAt: offset is negative")
 	}
 
 	t := offset / int64(r.bufSize)
-	if t+1 > (1<<32)-1 {
+	if t+1 > math.MaxUint32 {
 		return 0, ErrExceeded
 	}
 
@@ -436,7 +474,7 @@ func (r *DecReaderAt) ReadAt(p []byte, offset int64) (int, error) {
 	defer r.bufPool.Put(buffer)
 
 	decReader := DecReader{
-		r:              &sectionReader{r.r, t * int64(r.bufSize+r.cipher.Overhead())},
+		r:              &sectionReader{r: r.r, off: t * int64(r.bufSize+r.cipher.Overhead())},
 		cipher:         r.cipher,
 		bufSize:        r.bufSize,
 		nonce:          make([]byte, r.cipher.NonceSize()),
@@ -462,10 +500,16 @@ func (r *DecReaderAt) ReadAt(p []byte, offset int64) (int, error) {
 type sectionReader struct {
 	r   io.ReaderAt
 	off int64
+	err error
 }
 
 func (r *sectionReader) Read(p []byte) (int, error) {
-	n, err := r.r.ReadAt(p, r.off)
+	if r.err != nil {
+		return 0, r.err
+	}
+
+	var n int
+	n, r.err = r.r.ReadAt(p, r.off)
 	r.off += int64(n)
-	return n, err
+	return n, r.err
 }
