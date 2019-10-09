@@ -8,10 +8,19 @@ import (
 	"crypto/cipher"
 	"encoding/binary"
 	"io"
+	"math"
 )
 
-// EncWriter wraps an io.Writer and encrypts and authenticates everything
-// written to it. It MUST be closed to complete the encryption successfully.
+// An EncWriter encrypts and authenticates everything it
+// writes to an underlying io.Writer.
+//
+// An EncWriter must always be closed successfully.
+// Otherwise, the encrypted data written to the underlying
+// io.Writer would be incomplete. Also, no more data must
+// be written to a closed EncWriter.
+//
+// Closing an EncWriter also closes the underlying io.Writer
+// if it implements io.Closer.
 type EncWriter struct {
 	w       io.Writer
 	cipher  cipher.AEAD
@@ -28,13 +37,19 @@ type EncWriter struct {
 	closed bool
 }
 
-// Write encrypts and authenticates p before writting
-// it to the underlying io.Writer. It must not be called
-// after the EncWriter has been closed.
+// Write behaves as specified by the io.Writer interface.
+// In particular, Write encrypts len(p) bytes from p and
+// writes the encrypted bytes to the underlying data stream. It
+// returns the number of bytes written from p (0 <= n <= len(p))
+// and any error encountered that caused the write to stop early.
 //
-// It returns ErrExceeded when no more data can be encrypted
-// securely. However, the EncWriter can still be closed to
-// complete the encryption successfully.
+// When Write cannot encrypt any more bytes securely it
+// returns ErrExceeded. However, the EncWriter  must still
+// be closed to complete the encryption and flush any
+// remaining data to the underlying data stream.
+//
+// Write must not be called once the EncWriter has
+// been closed.
 func (w *EncWriter) Write(p []byte) (n int, err error) {
 	if w.closed {
 		panic("sio: EncWriter is closed")
@@ -81,12 +96,17 @@ func (w *EncWriter) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-// WriteByte encrypts and authenticates b
-// before writting it to the underlying
-// io.Writer.
+// WriteByte behaves as specified by the io.ByteWriter interface.
+// In particular, WriteByte encrypts b and writes the encrypted
+// byte to the underlying data stream.
 //
-// It returns ErrExceeded when no more data
-// can be encrypted securely.
+// When WriteByte cannot encrypt one more byte securely it
+// returns ErrExceeded. However, the EncWriter  must still
+// be closed to complete the encryption and flush any
+// remaining data to the underlying data stream.
+//
+// WriteByte must not be called once the EncWriter has
+// been closed.
 func (w *EncWriter) WriteByte(b byte) error {
 	if w.closed {
 		panic("sio: EncWriter is closed")
@@ -117,10 +137,12 @@ func (w *EncWriter) WriteByte(b byte) error {
 	return nil
 }
 
-// Close completes the encryption process and writes any remaining
-// bytes to the underlying io.Writer. If the underlying io.Writer
-// implements io.Closer, Close closes it as well. It is safe to
-// call Close multiple times.
+// Close writes any remaining encrypted bytes to the
+// underlying io.Writer and returns any error
+// encountered. If the underlying io.Writer implements
+// Close it closes the underlying data stream as well.
+//
+// It safe to call close multiple times.
 func (w *EncWriter) Close() error {
 	if w.err != nil && w.err != ErrExceeded {
 		return w.err
@@ -142,15 +164,22 @@ func (w *EncWriter) Close() error {
 	return nil
 }
 
-// ReadFrom reads from r until it encounters an error or reaches
-// io.EOF. It encrypts and authenticates everything it reads before
-// writting it to the underlying io.Writer. ReadFrom does NOT close
-// the EncWriter such that this must be done explicitly.
-// It must not be called after the EncWriter has been closed.
+// ReadFrom behaves as specified by the io.ReadFrom interface.
+// In particular, ReadFrom reads data from r until io.EOF or any
+// error occurs, encrypts the data and writes the encrypted data
+// to the underlying io.Writer. ReadFrom does not close the
+// EncWriter nor the underlying data stream.
 //
-// It returns ErrExceeded when no more data can be encrypted
-// securely. However, the EncWriter can still be closed to
-// complete the encryption successfully.
+// ReadFrom returns the number of bytes read and any error except
+// io.EOF.
+//
+// When ReadFrom cannot encrypt any more data securely it
+// returns ErrExceeded. However, the EncWriter  must still
+// be closed to complete the encryption and flush any
+// remaining data to the underlying data stream.
+//
+// ReadFrom must not be called once the EncWriter has
+// been closed.
 func (w *EncWriter) ReadFrom(r io.Reader) (int64, error) {
 	if w.closed {
 		panic("sio: EncWriter is closed")
@@ -159,43 +188,43 @@ func (w *EncWriter) ReadFrom(r io.Reader) (int64, error) {
 		return 0, w.err
 	}
 
-	var carry byte
-	var n int64
-
 	nn, err := readFrom(r, w.buffer[:w.bufSize+1])
 	if err == io.EOF {
 		w.offset = nn
-		return int64(nn), w.Close()
-	} else if err != nil {
-		w.err = err
-		return n, err
+		return int64(nn), nil
 	}
+	if err != nil {
+		w.err = err
+		return int64(nn), err
+	}
+	carry := w.buffer[w.bufSize]
 
-	carry = w.buffer[w.bufSize]
 	nonce, err := w.nextNonce()
 	if err != nil {
 		w.err = err
-		return n, w.err
+		return int64(nn), w.err
 	}
 	ciphertext := w.cipher.Seal(w.buffer[:0], nonce, w.buffer[:w.bufSize], w.associatedData)
 	if _, err = writeTo(w.w, ciphertext); err != nil {
 		w.err = err
-		return n, w.err
+		return int64(nn), w.err
 	}
 
-	n = int64(nn)
+	n := int64(nn)
 	for {
 		w.buffer[0] = carry
 		nn, err = readFrom(r, w.buffer[1:1+w.bufSize])
+		n += int64(nn)
 		if err == io.EOF {
 			w.offset = 1 + nn
-			return n + int64(nn), w.Close()
-		} else if err != nil {
+			return n, nil
+		}
+		if err != nil {
 			w.err = err
 			return n, w.err
 		}
-
 		carry = w.buffer[w.bufSize]
+
 		nonce, err = w.nextNonce()
 		if err != nil {
 			w.err = err
@@ -206,12 +235,11 @@ func (w *EncWriter) ReadFrom(r io.Reader) (int64, error) {
 			w.err = err
 			return n, w.err
 		}
-		n += int64(w.bufSize)
 	}
 }
 
 func (w *EncWriter) nextNonce() ([]byte, error) {
-	if w.seqNum == ((1 << 32) - 1) {
+	if w.seqNum == math.MaxUint32 {
 		return nil, ErrExceeded
 	}
 	binary.LittleEndian.PutUint32(w.nonce[w.cipher.NonceSize()-4:], w.seqNum)
@@ -219,8 +247,18 @@ func (w *EncWriter) nextNonce() ([]byte, error) {
 	return w.nonce, nil
 }
 
-// DecWriter wraps an io.Writer and decrypts and verifies everything
-// written to it. It MUST be closed to complete the decryption successfully.
+// A DecWriter decrypts and verifies everything it
+// writes to an underlying io.Writer. It never writes
+// invalid (i.e. not authentic) data to the underlying
+// data stream.
+//
+// A DecWriter must always be closed and the returned
+// error must be checked. Otherwise, the decrypted data
+// written to the underlying io.Writer would be incomplete.
+// Also, no more data must be written to a closed DecWriter.
+//
+// Closing a DecWriter also closes the underlying io.Writer
+// if it implements io.Closer.
 type DecWriter struct {
 	w       io.Writer
 	cipher  cipher.AEAD
@@ -237,14 +275,23 @@ type DecWriter struct {
 	closed bool
 }
 
-// Write decrypts and verifies p before writting
-// it to the underlying io.Writer. It must not be called
-// after the DecWriter has been closed.
+// Write behaves as specified by the io.Writer interface.
+// In particular, Write decrypts len(p) bytes from p and
+// writes the decrypted bytes to the underlying data stream. It
+// returns the number of bytes written from p (0 <= n <= len(p))
+// and any error encountered that caused the write to stop early.
 //
-// It returns ErrAuth when some part of p is not authentic
-// and never writes non-authentic data to the underlying
-// io.Writer. It returns ErrExceeded when no more
-// data can be decrypted securely.
+// When Write fails to decrypt some data it returns NotAuthentic.
+// This error indicates that the encrypted bytes have been
+// (maliciously) modified.
+//
+// When Write cannot decrypt any more bytes securely it
+// returns ErrExceeded. However, the DecWriter  must still
+// be closed to complete the decryption and flush any
+// remaining data to the underlying data stream.
+//
+// Write must not be called once the DecWriter has
+// been closed.
 func (w *DecWriter) Write(p []byte) (n int, err error) {
 	if w.closed {
 		panic("sio: DecWriter is closed")
@@ -301,12 +348,21 @@ func (w *DecWriter) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-// WriteByte decrypts and verifies b before
-// writting it to the underlying io.Writer.
+// WriteByte behaves as specified by the io.ByteWriter interface.
+// In particular, WriteByte decrypts b and writes the decrypted
+// byte to the underlying data stream.
 //
-// It returns ErrAuth if b is not authentic.
-// It returns ErrExceeded when no more data
-// can be decrypted securely.
+// When WriteByte fails to decrypt b it returns NotAuthentic.
+// This error indicates that some encrypted bytes have been
+// (maliciously) modified.
+//
+// When WriteByte cannot decrypt one more byte securely it
+// returns ErrExceeded. However, the DecWriter  must still
+// be closed to complete the decryption and flush any
+// remaining data to the underlying data stream.
+//
+// WriteByte must not be called once the DecWriter has
+// been closed.
 func (w *DecWriter) WriteByte(b byte) error {
 	if w.closed {
 		panic("sio: DecWriter is closed")
@@ -340,10 +396,17 @@ func (w *DecWriter) WriteByte(b byte) error {
 	return nil
 }
 
-// Close completes the decryption process and writes any remaining
-// bytes to the underlying io.Writer. If the underlying io.Writer
-// implements io.Closer, Close closes it as well. It is safe to
-// call Close multiple times.
+// Close writes any remaining decrypted bytes to the
+// underlying io.Writer and returns any error
+// encountered. If the underlying io.Writer implements
+// Close it closes the underlying data stream as well.
+//
+// It is important to check the returned error
+// since Close may return NotAuthentic indicating
+// that some remaining bytes are invalid encrypted
+// data.
+//
+// It safe to call close multiple times.
 func (w *DecWriter) Close() error {
 	if w.err != nil && w.err != ErrExceeded {
 		return w.err
@@ -369,15 +432,24 @@ func (w *DecWriter) Close() error {
 	return nil
 }
 
-// ReadFrom reads from r until it encounters an error or reaches
-// io.EOF. It decrypts and verifies everything it reads before
-// writting it to the underlying io.Writer. ReadFrom does NOT close
-// the DecWriter such that this must be done explicitly.
-// It must not be called after the DecWriter has been closed.
+// ReadFrom behaves as specified by the io.ReadFrom interface.
+// In particular, ReadFrom reads data from r until io.EOF or any
+// error occurs, decrypts the data and writes the decrypted data
+// to the underlying io.Writer. ReadFrom does not close the
+// DecWriter nor the underlying data stream.
 //
-// It returns ErrAuth if the read data is not authentic.
-// It returns ErrExceeded when no more data can be decrypted
-// securely.
+// ReadFrom returns the number of bytes read and any error except
+// io.EOF. When ReadFrom fails to decrypt some data it returns
+// NotAuthentic. This error indicates that some encrypted bytes
+// have been (maliciously) modified.
+//
+// When ReadFrom cannot decrypt any more data securely it
+// returns ErrExceeded. However, the DecWriter  must still
+// be closed to complete the decryption and flush any
+// remaining data to the underlying data stream.
+//
+// ReadFrom must not be called once the DecWriter has
+// been closed.
 func (w *DecWriter) ReadFrom(r io.Reader) (int64, error) {
 	if w.closed {
 		panic("sio: DecWriter is closed")
@@ -386,51 +458,50 @@ func (w *DecWriter) ReadFrom(r io.Reader) (int64, error) {
 		return 0, w.err
 	}
 
-	var carry byte
-	var n int64
-
 	ciphertextLen := w.bufSize + w.cipher.Overhead()
 	buffer := w.buffer[:1+ciphertextLen]
 
 	nn, err := readFrom(r, buffer[:1+ciphertextLen])
 	if err == io.EOF {
 		w.offset = nn
-		return int64(nn), w.Close()
-	} else if err != nil {
-		w.err = err
-		return n, err
+		return int64(nn), nil
 	}
+	if err != nil {
+		w.err = err
+		return int64(nn), err
+	}
+	carry := buffer[ciphertextLen]
 
-	carry = buffer[ciphertextLen]
 	nonce, err := w.nextNonce()
 	if err != nil {
 		w.err = err
-		return n, w.err
+		return int64(nn), w.err
 	}
 	plaintext, err := w.cipher.Open(buffer[:0], nonce, buffer[:ciphertextLen], w.associatedData)
 	if err != nil {
 		w.err = NotAuthentic
-		return n, w.err
+		return int64(nn), w.err
 	}
 	if _, err = writeTo(w.w, plaintext); err != nil {
 		w.err = err
-		return n, w.err
+		return int64(nn), w.err
 	}
 
-	n = int64(nn)
+	n := int64(nn)
 	for {
 		w.buffer[0] = carry
 		nn, err = readFrom(r, buffer[1:1+ciphertextLen])
+		n += int64(nn)
 		if err == io.EOF {
 			w.offset = 1 + nn
-			return n + int64(nn), w.Close()
+			return n, nil
 		}
 		if err != nil {
 			w.err = err
 			return n, w.err
 		}
-
 		carry = buffer[ciphertextLen]
+
 		nonce, err = w.nextNonce()
 		if err != nil {
 			w.err = err
@@ -445,12 +516,11 @@ func (w *DecWriter) ReadFrom(r io.Reader) (int64, error) {
 			w.err = err
 			return n, w.err
 		}
-		n += int64(ciphertextLen)
 	}
 }
 
 func (w *DecWriter) nextNonce() ([]byte, error) {
-	if w.seqNum == ((1 << 32) - 1) {
+	if w.seqNum == math.MaxUint32 {
 		return nil, ErrExceeded
 	}
 	binary.LittleEndian.PutUint32(w.nonce[w.cipher.NonceSize()-4:], w.seqNum)

@@ -99,16 +99,22 @@ func TestReadFrom(t *testing.T) {
 	if n, err := sw.ReadFrom(bytes.NewReader(data)); err != nil || n != int64(len(data)) {
 		t.Fatalf("ReadFrom failed: got %d - want %d err: %v", n, int64(len(data)), err)
 	}
-	if !sw.closed {
-		t.Fatal("EncWriter wasn't closed by ReadFrom")
+	if sw.closed {
+		t.Fatal("EncWriter has been closed by ReadFrom")
+	}
+	if err := sw.Close(); err != nil {
+		t.Fatalf("Close failed: err: %v", err)
 	}
 
 	ctLen := int64(ciphertext.Len())
 	if n, err := ow.ReadFrom(ciphertext); err != nil || n != ctLen {
 		t.Fatalf("ReadFrom failed: got %d - want %d err: %v", n, ctLen, err)
 	}
-	if !ow.closed {
-		t.Fatal("DecWriter wasn't closed by ReadFrom")
+	if ow.closed {
+		t.Fatal("DecWriter has been closed by ReadFrom")
+	}
+	if err := ow.Close(); err != nil {
+		t.Fatalf("Close failed: err: %v", err)
 	}
 
 	if p := plaintext.Bytes(); !bytes.Equal(p, data) {
