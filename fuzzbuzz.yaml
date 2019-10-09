@@ -4,7 +4,7 @@ targets:
     language: go
     version: "1.11"
     setup:
-      - ./github.com/secure-io/sio-go/fuzz-corpus.sh
+      - ./fuzz-corpus.sh
     corpus: ./corpus
     
     harness:
