@@ -10,6 +10,7 @@ import (
 	"crypto/cipher"
 	"encoding/binary"
 	"io"
+	"math"
 	"sync"
 )
 
@@ -23,16 +24,19 @@ const (
 
 const (
 	// NotAuthentic is returned when the decryption of a data stream fails.
-	// It indicates that the data is not authentic - e.g. malisously modified.
-	NotAuthentic errorType = "data is not authentic"
+	// It indicates that the encrypted data is invalid - i.e. it has been
+	// (maliciously) modified.
+	NotAuthentic errorType = "sio: data is not authentic"
 
 	// ErrExceeded is returned when no more data can be encrypted /
 	// decrypted securely. It indicates that the data stream is too
 	// large to be encrypted / decrypted with a single key-nonce
 	// combination.
 	//
-	// For BufSize this will happen after processing ~64 TiB.
-	ErrExceeded errorType = "data limit exceeded"
+	// It depends on the buffer size how many bytes can be
+	// encrypted / decrypted securely using the same key-nonce
+	// combination. For BufSize the limit is ~64 TiB.
+	ErrExceeded errorType = "sio: data limit exceeded"
 )
 
 type errorType string
@@ -40,11 +44,9 @@ type errorType string
 func (e errorType) Error() string { return string(e) }
 
 // NewStream creates a new Stream that encrypts or decrypts data
-// streams with the cipher. If you don't have special requirements
-// just use the default BufSize.
-//
-// The returned Stream will allocate a new bufSize large buffer
-// when en/decrypting a data stream.
+// streams with the cipher using bufSize large chunks. Therefore,
+// the bufSize must be the same for encryption and decryption. If
+// you don't have special requirements just use the default BufSize.
 //
 // The cipher must support a NonceSize() >= 4 and the
 // bufSize must be between 1 (inclusive) and MaxBufSize (inclusive).
@@ -75,35 +77,53 @@ type Stream struct {
 func (s *Stream) NonceSize() int { return s.cipher.NonceSize() - 4 }
 
 // Overhead returns the overhead added when encrypting a
-// data stream. It panic's if the length is either negative
-// or exceeds the data limit of (2³² - 1) * bufSize bytes.
-func (s *Stream) Overhead(length int64) int64 {
-	if length < 0 {
-		panic("sio: length is negative")
+// data stream. For a plaintext stream of a non-negative
+// size, the size of an encrypted data stream will be:
+//
+//   encSize = size + stream.Overhead(size) // 0 <= size <= (2³² - 1) * bufSize
+//         0 = stream.Overhead(size)        // size > (2³² - 1) * bufSize
+//        -1 = stream.Overhead(size)        // size < 0
+//
+// In general, the size of an encrypted data stream is
+// always greater than the size of the corresponding
+// plaintext stream. If size is too large (i.e.
+// greater than (2³² - 1) * bufSize) then Overhead
+// returns 0. If size is negative Overhead returns -1.
+func (s *Stream) Overhead(size int64) int64 {
+	if size < 0 {
+		return -1
 	}
-	if length > int64(s.bufSize)*((1<<32)-1) {
-		panic("sio: length exceeds data limit")
+
+	bufSize := int64(s.bufSize)
+	if size > (bufSize * math.MaxUint32) {
+		return 0
 	}
 
 	overhead := int64(s.cipher.Overhead())
-	if length == 0 {
+	if size == 0 {
 		return overhead
 	}
 
-	t := length / int64(s.bufSize)
-	if r := length % int64(s.bufSize); r > 0 {
+	t := size / bufSize
+	if r := size % bufSize; r > 0 {
 		return (t * overhead) + overhead
 	}
 	return t * overhead
 }
 
 // EncryptWriter returns a new EncWriter that wraps w and
-// encrypts and authenticates everything written to it.
-// The nonce must be NonceSize() bytes long and unique for
-// the same key (used to create cipher.AEAD). The
-// associatedData is authenticated but neither encrypted nor
-// written to w and must be provided whenever decrypting the
-// data again.
+// encrypts and authenticates everything before writing
+// it to w.
+//
+// The nonce must be Stream.NonceSize() bytes long and unique
+// for the same key. The same nonce must be provided when
+// decrypting the data stream.
+//
+// The associatedData is only authenticated but not encrypted
+// and not written to w. Instead, the same associatedData must
+// be provided when decrypting the data stream again. It is
+// safe to set:
+//   associatedData = nil
 func (s *Stream) EncryptWriter(w io.Writer, nonce, associatedData []byte) *EncWriter {
 	if len(nonce) != s.NonceSize() {
 		panic("sio: nonce has invalid length")
@@ -124,10 +144,14 @@ func (s *Stream) EncryptWriter(w io.Writer, nonce, associatedData []byte) *EncWr
 }
 
 // DecryptWriter returns a new DecWriter that wraps w and
-// decrypts and verifies everything written to it. The
-// nonce and associatedData must match the values used
-// when encrypting the data. The associatedData is not
-// written to w.
+// decrypts and verifies everything before writing
+// it to w.
+//
+// The nonce must be Stream.NonceSize() bytes long and
+// must match the value used when encrypting the data stream.
+//
+// The associatedData must match the value used when encrypting
+// the data stream.
 func (s *Stream) DecryptWriter(w io.Writer, nonce, associatedData []byte) *DecWriter {
 	if len(nonce) != s.NonceSize() {
 		panic("sio: nonce has invalid length")
@@ -148,10 +172,17 @@ func (s *Stream) DecryptWriter(w io.Writer, nonce, associatedData []byte) *DecWr
 }
 
 // EncryptReader returns a new EncReader that wraps r and
-// encrypts and authenticates everything it reads. The
-// nonce must be NonceSize() bytes long and unique for
-// the same key (used to create cipher.AEAD). The
-// associatedData is authenticated but not encrypted.
+// encrypts and authenticates it reads from r.
+//
+// The nonce must be Stream.NonceSize() bytes long and unique
+// for the same key. The same nonce must be provided when
+// decrypting the data stream.
+//
+// The associatedData is only authenticated but not encrypted
+// and not written to w. Instead, the same associatedData must
+// be provided when decrypting the data stream again. It is
+// safe to set:
+//   associatedData = nil
 func (s *Stream) EncryptReader(r io.Reader, nonce, associatedData []byte) *EncReader {
 	if len(nonce) != s.NonceSize() {
 		panic("sio: nonce has invalid length")
@@ -174,9 +205,13 @@ func (s *Stream) EncryptReader(r io.Reader, nonce, associatedData []byte) *EncRe
 }
 
 // DecryptReader returns a new DecReader that wraps r and
-// decrypts and verifies everything it reads. The nonce
-// and associatedData must match the values used to
-// encrypt the data.
+// decrypts and verifies everything it reads from r.
+//
+// The nonce must be Stream.NonceSize() bytes long and
+// must match the value used when encrypting the data stream.
+//
+// The associatedData must match the value used when encrypting
+// the data stream.
 func (s *Stream) DecryptReader(r io.Reader, nonce, associatedData []byte) *DecReader {
 	if len(nonce) != s.NonceSize() {
 		panic("sio: nonce has invalid length")
@@ -198,10 +233,14 @@ func (s *Stream) DecryptReader(r io.Reader, nonce, associatedData []byte) *DecRe
 	return dr
 }
 
-// DecryptReaderAt returns a new DecReaderAt that wraps r and
-// decrypts and verifies everything it reads. The nonce
-// and associatedData must match the values used to
-// encrypt the data.
+// DecryptReader returns a new DecReaderAt that wraps r and
+// decrypts and verifies everything it reads from r.
+//
+// The nonce must be Stream.NonceSize() bytes long and
+// must match the value used when encrypting the data stream.
+//
+// The associatedData must match the value used when encrypting
+// the data stream.
 func (s *Stream) DecryptReaderAt(r io.ReaderAt, nonce, associatedData []byte) *DecReaderAt {
 	if len(nonce) != s.NonceSize() {
 		panic("sio: nonce has invalid length")
