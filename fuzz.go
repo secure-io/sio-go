@@ -61,6 +61,8 @@ func init() {
 	wStream = NewStream(c20p1305, BufSize)
 }
 
+var maxDataLen int
+
 func FuzzAll(data []byte) int {
 	v := FuzzReader(data)
 	v += FuzzReadByte(data)
@@ -69,6 +71,11 @@ func FuzzAll(data []byte) int {
 	v += FuzzWrite(data)
 	v += FuzzWriteByte(data)
 	v += FuzzReadFrom(data)
+
+	if len(data) > maxDataLen { // Prefer longer inputs
+		maxDataLen = len(data)
+		v += 1
+	}
 	return v
 }
 
