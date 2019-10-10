@@ -1,6 +1,6 @@
 base: ubuntu:16.04
 targets:
-  - name: secure-io
+  - name: sio
     language: go
     version: "1.11"
     setup:
