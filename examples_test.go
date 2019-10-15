@@ -15,25 +15,65 @@ import (
 	"strings"
 
 	"github.com/secure-io/sio-go"
-	"golang.org/x/crypto/chacha20poly1305"
 )
 
-func ExampleNewStream_aESGCM() {
+func ExampleNewStream_aES128GCM() {
 	// Load your secret key from a safe place. You should use a unique key
-	// per data stream since the nonce size of `Stream` (with AES-GCM) is
+	// per data stream since the nonce size of `Stream` (with AES-128-GCM) is
 	// to short for chosing a nonce at random (risk of repeating the
 	// nonce is too high).
 	// Obviously don't use this example key for anything real.
 	// If you want to convert a passphrase to a key, use a suitable
-	// package like argon2 or scrypt. Use 16 byte (128 bit) for
-	// AES128-GCM and 32 byte (256 bit) for AES256-GCM.
-	key, _ := hex.DecodeString("4310889c63c87a957e11e0b3d75047beadc8736d72fc1407439862e85a7377f4")
-	block, _ := aes.NewCipher(key)
-	gcm, _ := cipher.NewGCM(block)
+	// package like argon2 or scrypt.
+	key, _ := hex.DecodeString("4c4d737f2199f3ccb13d2c81dfe38eb8")
+	stream, err := sio.AES_128_GCM.New(key)
+	if err != nil {
+		panic(err) // TODO: error handling
+	}
 
+	// Print the nonce size for Stream (with AES-128-GCM) and the overhead added
+	// when encrypting a 1 MiB data stream.
+	fmt.Printf("NonceSize: %d, Overhead: %d", stream.NonceSize(), stream.Overhead(1024*1024))
+	//Output: NonceSize: 8, Overhead: 1024
+}
+
+func ExampleNewStream_aES192GCM() {
+	// Load your secret key from a safe place. You should use a unique key
+	// per data stream since the nonce size of `Stream` (with AES-192-GCM) is
+	// to short for chosing a nonce at random (risk of repeating the
+	// nonce is too high).
+	// Obviously don't use this example key for anything real.
+	// If you want to convert a passphrase to a key, use a suitable
+	// package like argon2 or scrypt.
+	key, _ := hex.DecodeString("fe6165e714125dc3d84d3349f9e3020430ce9d77e0a1f2c0")
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		panic(err) // TODO: error handling
+	}
+	gcm, _ := cipher.NewGCM(block)
 	stream := sio.NewStream(gcm, sio.BufSize)
 
-	// Print the nonce size for Stream (with AES-GCM) and the overhead added
+	// Print the nonce size for Stream (with AES-192-GCM) and the overhead added
+	// when encrypting a 1 MiB data stream.
+	fmt.Printf("NonceSize: %d, Overhead: %d", stream.NonceSize(), stream.Overhead(1024*1024))
+	//Output: NonceSize: 8, Overhead: 1024
+}
+
+func ExampleNewStream_aES256GCM() {
+	// Load your secret key from a safe place. You should use a unique key
+	// per data stream since the nonce size of `Stream` (with AES-256-GCM) is
+	// to short for chosing a nonce at random (risk of repeating the
+	// nonce is too high).
+	// Obviously don't use this example key for anything real.
+	// If you want to convert a passphrase to a key, use a suitable
+	// package like argon2 or scrypt.
+	key, _ := hex.DecodeString("5b48c6945ae03a93ecc20e38305d2cbe4a177133d83bf4773f1f3be636e2cc4b")
+	stream, err := sio.AES_256_GCM.New(key)
+	if err != nil {
+		panic(err) // TODO: error handling
+	}
+
+	// Print the nonce size for Stream (with AES-256-GCM) and the overhead added
 	// when encrypting a 1 MiB data stream.
 	fmt.Printf("NonceSize: %d, Overhead: %d", stream.NonceSize(), stream.Overhead(1024*1024))
 	//Output: NonceSize: 8, Overhead: 1024
@@ -50,9 +90,10 @@ func ExampleNewStream_xChaCha20Poly1305() {
 	// package like argon2 or scrypt - or take a look at the sio/sioutil
 	// package.
 	key, _ := hex.DecodeString("f230e700c4f120b623b84ac26cbcb5ae926f44f36589e63745a46ae0ca47137d")
-	x20p1305, _ := chacha20poly1305.NewX(key)
-
-	stream := sio.NewStream(x20p1305, sio.BufSize)
+	stream, err := sio.XChaCha20Poly1305.New(key)
+	if err != nil {
+		panic(err) // TODO: error handling
+	}
 
 	// Print the nonce size for Stream (with XChaCha20-Poly1305) and the
 	// overhead added when encrypting a 1 MiB data stream.
