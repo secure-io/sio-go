@@ -7,11 +7,14 @@
 package sio
 
 import (
+	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
 	"io"
 	"math"
 	"sync"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 const (
@@ -42,6 +45,67 @@ const (
 type errorType string
 
 func (e errorType) Error() string { return string(e) }
+
+// The following constants specify concrete AEAD algorithms
+// which can be used to encrypt and decrypt data streams.
+// Therefore, the non-exported type algorithm defines an
+// exported New function that you can call to create a new
+// Stream:
+//   // New returns a new Stream that encrypts and decrypts
+//   // data streams using the given secret key and AEAD
+//   // algorithm.
+//   // The returned Stream uses the default buffer size: BufSize.
+//   func (a algorithm) NewStream(key []byte) (*Stream, error)
+//
+// For example, you can create a new Stream using AES-GCM like this:
+//   stream, err := sio.AES_128_GCM.New(key)
+const (
+	AES_128_GCM       algorithm = "AES-128-GCM"        // The secret key must be 16 bytes long. See: https://golang.org/pkg/crypto/cipher/#NewGCM
+	AES_256_GCM       algorithm = "AES-256-GCM"        // The secret key must be 32 bytes long. See: https://golang.org/pkg/crypto/cipher/#NewGCM
+	ChaCha20Poly1305  algorithm = "ChaCha20-Poly1305"  // The secret key must be 32 bytes long. See: https://godoc.org/golang.org/x/crypto/chacha20poly1305#New
+	XChaCha20Poly1305 algorithm = "XChaCha20-Poly1305" // The secret key must be 32 bytes long. See: https://godoc.org/golang.org/x/crypto/chacha20poly1305#NewX
+)
+
+type algorithm string
+
+// New returns a new Stream that encrypts and decrypts
+// data streams using the given secret key and AEAD
+// algorithm.
+// The returned Stream uses the default buffer size: BufSize.
+func (a algorithm) New(key []byte) (*Stream, error) {
+	var (
+		aead cipher.AEAD
+		err  error
+	)
+	switch a {
+	case AES_128_GCM:
+		if len(key) != 128/8 {
+			return nil, aes.KeySizeError(len(key))
+		}
+		aead, err = newAESGCM(key)
+	case AES_256_GCM:
+		if len(key) != 256/8 {
+			return nil, aes.KeySizeError(len(key))
+		}
+		aead, err = newAESGCM(key)
+	case ChaCha20Poly1305:
+		aead, err = chacha20poly1305.New(key)
+	case XChaCha20Poly1305:
+		aead, err = chacha20poly1305.NewX(key)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return NewStream(aead, BufSize), nil
+}
+
+func newAESGCM(key []byte) (cipher.AEAD, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	return cipher.NewGCM(block)
+}
 
 // NewStream creates a new Stream that encrypts or decrypts data
 // streams with the cipher using bufSize large chunks. Therefore,
