@@ -52,5 +52,5 @@ func PlaintextSize() int {
 
 type devNull struct{}
 
-func (_ devNull) Read(p []byte) (int, error)  { return len(p), nil }
-func (_ devNull) Write(p []byte) (int, error) { return len(p), nil }
+func (devNull) Read(p []byte) (int, error)  { return len(p), nil }
+func (devNull) Write(p []byte) (int, error) { return len(p), nil }

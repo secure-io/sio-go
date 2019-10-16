@@ -233,7 +233,7 @@ func (s *Stream) DecryptReader(r io.Reader, nonce, associatedData []byte) *DecRe
 	return dr
 }
 
-// DecryptReader returns a new DecReaderAt that wraps r and
+// DecryptReaderAt returns a new DecReaderAt that wraps r and
 // decrypts and verifies everything it reads from r.
 //
 // The nonce must be Stream.NonceSize() bytes long and
