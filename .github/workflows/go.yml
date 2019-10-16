@@ -30,6 +30,4 @@ jobs:
       env:
         GO111MODULE: on
       run: |
-        diff -au <(gofmt -d .) <(printf "")
-        diff -au <(go vet .) <(printf "")
-        go test -tags gofuzz ./...
+         go test -tags gofuzz ./...

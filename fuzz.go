@@ -74,7 +74,7 @@ func FuzzAll(data []byte) int {
 
 	if len(data) > maxDataLen { // Prefer longer inputs
 		maxDataLen = len(data)
-		v += 1
+		v++
 	}
 	return v
 }

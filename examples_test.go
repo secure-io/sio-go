@@ -43,7 +43,7 @@ func ExampleNewStream_xChaCha20Poly1305() {
 	// Load your secret key from a safe place. You may reuse it for
 	// en/decrypting multiple data streams. (XChaCha20-Poly1305 nonce
 	// values are large enough to be chosen at random without risking
-	// to select a nonce twice - probability is negligable).
+	// to select a nonce twice - probability is negligible).
 	//
 	// Obviously don't use this example key for anything real.
 	// If you want to convert a passphrase to a key, use a suitable
