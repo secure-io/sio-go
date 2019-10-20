@@ -5,52 +5,102 @@
 package sio
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"flag"
-	"fmt"
-	"os"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"io/ioutil"
+	mrand "math/rand"
 )
 
-func init() {
-	flag.Int64Var(&testBufSize, "sio.BufSize", BufSize/1024, "The buffer size for tests and benchmarks in KiB")
-	flag.Int64Var(&testPlaintextSize, "sio.PlaintextSize", 1024, "The plaintext size for tests in KiB")
-
-	block, err := aes.NewCipher(make([]byte, 16))
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create AES: %v", err))
-	}
-	AES128GCM, err = cipher.NewGCM(block)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create AES-GCM: %v", err))
-	}
-}
-
-var (
-	testBufSize       int64
-	testPlaintextSize int64
-
-	AES128GCM cipher.AEAD
-	DevNull   = devNull{}
-)
-
-func BufferSize() int {
-	if !flag.Parsed() {
-		fmt.Fprintf(os.Stderr, "sio: BufferSize() called before flag.Parse\n")
-		os.Exit(2)
-	}
-	return int(testBufSize) * 1024
-}
-
-func PlaintextSize() int {
-	if !flag.Parsed() {
-		fmt.Fprintf(os.Stderr, "sio: BufferSize() called before flag.Parse\n")
-		os.Exit(2)
-	}
-	return int(testPlaintextSize) * 1024
-}
+var DevNull = devNull{}
 
 type devNull struct{}
 
 func (devNull) Read(p []byte) (int, error)  { return len(p), nil }
 func (devNull) Write(p []byte) (int, error) { return len(p), nil }
+
+func random(size int) []byte {
+	key := make([]byte, size)
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		panic(err)
+	}
+	return key
+}
+
+func randomN(size int) []byte {
+	key := make([]byte, mrand.Intn(size))
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		panic(err)
+	}
+	return key
+}
+
+func copyBytes(dst io.ByteWriter, src io.ByteReader) error {
+	for {
+		b, err := src.ReadByte()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err = dst.WriteByte(b); err != nil {
+			return err
+		}
+	}
+}
+
+func loadTestVectors(filename string) []TestVector {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		panic(err)
+	}
+
+	var vec []struct {
+		Algorithm      algorithm
+		BufSize        int
+		Key            string
+		Nonce          string
+		AssociatedData string
+		Plaintext      string
+		Ciphertext     string
+	}
+	if err = json.Unmarshal(data, &vec); err != nil {
+		panic(err)
+	}
+
+	testVectors := make([]TestVector, len(vec))
+	for i, v := range vec {
+		key, err := hex.DecodeString(v.Key)
+		if err != nil {
+			panic(err)
+		}
+		nonce, err := hex.DecodeString(v.Nonce)
+		if err != nil {
+			panic(err)
+		}
+		associatedData, err := hex.DecodeString(v.AssociatedData)
+		if err != nil {
+			panic(err)
+		}
+		plaintext, err := hex.DecodeString(v.Plaintext)
+		if err != nil {
+			panic(err)
+		}
+		ciphertext, err := hex.DecodeString(v.Ciphertext)
+		if err != nil {
+			panic(err)
+		}
+		testVectors[i] = TestVector{
+			Algorithm:      v.Algorithm,
+			BufSize:        v.BufSize,
+			Key:            key,
+			Nonce:          nonce,
+			AssociatedData: associatedData,
+			Plaintext:      plaintext,
+			Ciphertext:     ciphertext,
+		}
+	}
+	return testVectors
+}

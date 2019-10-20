@@ -11,114 +11,219 @@ import (
 	"testing"
 )
 
-func TestWrite(t *testing.T) {
-	s := NewStream(AES128GCM, BufferSize())
+func TestVectorWrite(t *testing.T) {
+	ciphertext := bytes.NewBuffer(nil)
+	plaintext := bytes.NewBuffer(nil)
 
-	data := make([]byte, PlaintextSize())
-	nonce := make([]byte, s.NonceSize())
-	associatedData := make([]byte, 32)
+	for i, test := range TestVectors {
+		ciphertext.Reset()
+		plaintext.Reset()
 
-	plaintext := bytes.NewBuffer(make([]byte, 0, len(data)))
-	ciphertext := bytes.NewBuffer(make([]byte, 0, int64(len(data))+s.Overhead(int64(len(data)))))
+		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
+		}
 
-	ew := s.EncryptWriter(ciphertext, nonce, associatedData)
-	dw := s.DecryptWriter(plaintext, nonce, associatedData)
+		dw := stream.DecryptWriter(plaintext, test.Nonce, test.AssociatedData)
+		if _, err = dw.Write(test.Ciphertext); err != nil {
+			t.Fatalf("Test %d: Failed to decrypt ciphertext: %v", i, err)
+		}
+		if err = dw.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close DecWriter: %v", i, err)
+		}
+		if !bytes.Equal(plaintext.Bytes(), test.Plaintext) {
+			t.Fatalf("Test %d: plaintext does not match original plaintext", i)
+		}
 
-	half := len(data) / 2
-	if n, err := ew.Write(data[:half]); err != nil || n != half {
-		t.Fatalf("Write failed: got %d - want %d err: %v", n, half, err)
-	}
-	if n, err := ew.Write(data[half:]); err != nil || n != len(data)-half {
-		t.Fatalf("Write failed: got %d - want %d err: %v", n, len(data)-half, err)
-	}
-	if err := ew.Close(); err != nil {
-		t.Fatalf("Close failed: %v", err)
-	}
-
-	half = len(ciphertext.Bytes()) / 2
-	if n, err := dw.Write(ciphertext.Bytes()[:half]); err != nil || n != half {
-		t.Fatalf("Write failed: got %d - want %d err: %v", n, half, err)
-	}
-	if n, err := dw.Write(ciphertext.Bytes()[half:]); err != nil || n != len(ciphertext.Bytes())-half {
-		t.Fatalf("Write failed: got %d - want %d err: %v", n, len(ciphertext.Bytes())-half, err)
-	}
-	if err := dw.Close(); err != nil {
-		t.Fatalf("Close failed: %v", err)
-	}
-
-	if p := plaintext.Bytes(); !bytes.Equal(p, data) {
-		t.Fatal("Decrypted data does not match the plaintext")
+		ew := stream.EncryptWriter(ciphertext, test.Nonce, test.AssociatedData)
+		if _, err = ew.Write(test.Plaintext); err != nil {
+			t.Fatalf("Test: %d: Failed to encrypt plaintext: %v", i, err)
+		}
+		if err = ew.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close EncWriter: %v", i, err)
+		}
+		if !bytes.Equal(ciphertext.Bytes(), test.Ciphertext) {
+			t.Fatalf("Test %d: ciphertext does not match original plaintext", i)
+		}
 	}
 }
 
-func TestWriteByte(t *testing.T) {
-	s := NewStream(AES128GCM, BufferSize())
-	data := make([]byte, PlaintextSize())
-	nonce := make([]byte, s.NonceSize())
-	associatedData := make([]byte, 32)
+func TestVectorWriteByte(t *testing.T) {
+	ciphertext := bytes.NewBuffer(nil)
+	plaintext := bytes.NewBuffer(nil)
 
-	plaintext := bytes.NewBuffer(make([]byte, 0, len(data)))
-	ciphertext := bytes.NewBuffer(make([]byte, 0, len(data)))
+	for i, test := range TestVectors {
+		ciphertext.Reset()
+		plaintext.Reset()
 
-	ew := s.EncryptWriter(ciphertext, nonce, associatedData)
-	for i, b := range data {
-		if err := ew.WriteByte(b); err != nil {
-			t.Fatalf("WriteByte failed at byte %d with: %v", i, err)
+		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
-	}
-	if err := ew.Close(); err != nil {
-		t.Fatalf("Close failed: %v", err)
-	}
 
-	dw := s.DecryptWriter(plaintext, nonce, associatedData)
-	for i, b := range ciphertext.Bytes() {
-		if err := dw.WriteByte(b); err != nil {
-			t.Fatalf("WriteByte failed at byte %d with: %v", i, err)
+		dw := stream.DecryptWriter(plaintext, test.Nonce, test.AssociatedData)
+		if err = copyBytes(dw, bytes.NewReader(test.Ciphertext)); err != nil {
+			t.Fatalf("Test %d: Failed to decrypt ciphertext: %v", i, err)
 		}
-	}
-	if err := dw.Close(); err != nil {
-		t.Fatalf("Close failed: %v", err)
-	}
+		if err = dw.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close DecWriter: %v", i, err)
+		}
+		if !bytes.Equal(plaintext.Bytes(), test.Plaintext) {
+			t.Fatalf("Test %d: plaintext does not match original plaintext", i)
+		}
 
-	if p := plaintext.Bytes(); !bytes.Equal(p, data) {
-		t.Fatal("Decrypted data does not match plaintext")
+		ew := stream.EncryptWriter(ciphertext, test.Nonce, test.AssociatedData)
+		if err = copyBytes(ew, bytes.NewReader(test.Plaintext)); err != nil {
+			t.Fatalf("Test: %d: Failed to encrypt plaintext: %v", i, err)
+		}
+		if err = ew.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close EncWriter: %v", i, err)
+		}
+		if !bytes.Equal(ciphertext.Bytes(), test.Ciphertext) {
+			t.Fatalf("Test %d: ciphertext does not match original plaintext", i)
+		}
 	}
 }
 
-func TestReadFrom(t *testing.T) {
-	s := NewStream(AES128GCM, BufferSize())
-	data := make([]byte, PlaintextSize())
-	nonce := make([]byte, s.NonceSize())
-	associatedData := make([]byte, 32)
+func TestVectorReadFrom(t *testing.T) {
+	ciphertext := bytes.NewBuffer(nil)
+	plaintext := bytes.NewBuffer(nil)
 
-	plaintext := bytes.NewBuffer(make([]byte, 0, len(data)))
-	ciphertext := bytes.NewBuffer(make([]byte, 0, int64(len(data))+s.Overhead(int64(len(data)))))
-	sw := s.EncryptWriter(ciphertext, nonce, associatedData)
-	ow := s.DecryptWriter(plaintext, nonce, associatedData)
+	for i, test := range TestVectors {
+		ciphertext.Reset()
+		plaintext.Reset()
 
-	if n, err := sw.ReadFrom(bytes.NewReader(data)); err != nil || n != int64(len(data)) {
-		t.Fatalf("ReadFrom failed: got %d - want %d err: %v", n, int64(len(data)), err)
-	}
-	if sw.closed {
-		t.Fatal("EncWriter has been closed by ReadFrom")
-	}
-	if err := sw.Close(); err != nil {
-		t.Fatalf("Close failed: err: %v", err)
-	}
+		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
+		}
 
-	ctLen := int64(ciphertext.Len())
-	if n, err := ow.ReadFrom(ciphertext); err != nil || n != ctLen {
-		t.Fatalf("ReadFrom failed: got %d - want %d err: %v", n, ctLen, err)
-	}
-	if ow.closed {
-		t.Fatal("DecWriter has been closed by ReadFrom")
-	}
-	if err := ow.Close(); err != nil {
-		t.Fatalf("Close failed: err: %v", err)
-	}
+		dw := stream.DecryptWriter(plaintext, test.Nonce, test.AssociatedData)
+		if _, err = dw.ReadFrom(bytes.NewReader(test.Ciphertext)); err != nil {
+			t.Fatalf("Test %d: Failed to decrypt ciphertext: %v", i, err)
+		}
+		if err = dw.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close DecWriter: %v", i, err)
+		}
+		if !bytes.Equal(plaintext.Bytes(), test.Plaintext) {
+			t.Fatalf("Test %d: plaintext does not match original plaintext", i)
+		}
 
-	if p := plaintext.Bytes(); !bytes.Equal(p, data) {
-		t.Fatal("Decrypted data does not match the plaintext")
+		ew := stream.EncryptWriter(ciphertext, test.Nonce, test.AssociatedData)
+		if _, err = ew.ReadFrom(bytes.NewReader(test.Plaintext)); err != nil {
+			t.Fatalf("Test: %d: Failed to encrypt plaintext: %v", i, err)
+		}
+		if err = ew.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close EncWriter: %v", i, err)
+		}
+		if !bytes.Equal(ciphertext.Bytes(), test.Ciphertext) {
+			t.Fatalf("Test %d: ciphertext does not match original plaintext", i)
+		}
+	}
+}
+
+func TestSimpleWrite(t *testing.T) {
+	ciphertext := bytes.NewBuffer(nil)
+	plaintext := bytes.NewBuffer(nil)
+
+	for i, test := range SimpleTests {
+		ciphertext.Reset()
+		plaintext.Reset()
+
+		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
+		}
+
+		ew := stream.EncryptWriter(ciphertext, test.Nonce, test.AssociatedData)
+		if _, err = ew.Write(test.Plaintext); err != nil {
+			t.Fatalf("Test: %d: Failed to encrypt plaintext: %v", i, err)
+		}
+		if err = ew.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close EncWriter: %v", i, err)
+		}
+
+		dw := stream.DecryptWriter(plaintext, test.Nonce, test.AssociatedData)
+		if _, err = dw.Write(ciphertext.Bytes()); err != nil {
+			t.Fatalf("Test %d: Failed to decrypt ciphertext: %v", i, err)
+		}
+		if err = dw.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close DecWriter: %v", i, err)
+		}
+
+		if !bytes.Equal(plaintext.Bytes(), test.Plaintext) {
+			t.Fatalf("Test %d: plaintext does not match original plaintext", i)
+		}
+	}
+}
+
+func TestSimpleWriteByte(t *testing.T) {
+	ciphertext := bytes.NewBuffer(nil)
+	plaintext := bytes.NewBuffer(nil)
+
+	for i, test := range SimpleTests {
+		ciphertext.Reset()
+		plaintext.Reset()
+
+		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
+		}
+
+		ew := stream.EncryptWriter(ciphertext, test.Nonce, test.AssociatedData)
+		if err = copyBytes(ew, bytes.NewReader(test.Plaintext)); err != nil {
+			t.Fatalf("Test: %d: Failed to encrypt plaintext: %v", i, err)
+		}
+		if err = ew.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close EncWriter: %v", i, err)
+		}
+
+		dw := stream.DecryptWriter(plaintext, test.Nonce, test.AssociatedData)
+		if err = copyBytes(dw, ciphertext); err != nil {
+			t.Fatalf("Test %d: Failed to decrypt ciphertext: %v", i, err)
+		}
+		if err = dw.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close DecWriter: %v", i, err)
+		}
+
+		if !bytes.Equal(plaintext.Bytes(), test.Plaintext) {
+			t.Fatalf("Test %d: plaintext does not match original plaintext", i)
+		}
+	}
+}
+
+func TestSimpleReadFrom(t *testing.T) {
+	ciphertext := bytes.NewBuffer(nil)
+	plaintext := bytes.NewBuffer(nil)
+
+	for i, test := range SimpleTests {
+		ciphertext.Reset()
+		plaintext.Reset()
+
+		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
+		}
+
+		ew := stream.EncryptWriter(ciphertext, test.Nonce, test.AssociatedData)
+		if _, err = ew.ReadFrom(bytes.NewReader(test.Plaintext)); err != nil {
+			t.Fatalf("Test: %d: Failed to encrypt plaintext: %v", i, err)
+		}
+		if err = ew.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close EncWriter: %v", i, err)
+		}
+
+		dw := stream.DecryptWriter(plaintext, test.Nonce, test.AssociatedData)
+		if _, err = dw.ReadFrom(ciphertext); err != nil {
+			t.Fatalf("Test %d: Failed to decrypt ciphertext: %v", i, err)
+		}
+		if err = dw.Close(); err != nil {
+			t.Fatalf("Test: %d: Failed to close DecWriter: %v", i, err)
+		}
+
+		if !bytes.Equal(plaintext.Bytes(), test.Plaintext) {
+			t.Fatalf("Test %d: plaintext does not match original plaintext", i)
+		}
 	}
 }
 
@@ -132,7 +237,10 @@ func TestWriteAfterClose(t *testing.T) {
 		w.Write(nil)
 	}
 
-	s := NewStream(AES128GCM, BufferSize())
+	s, err := AES_128_GCM.New(make([]byte, 16))
+	if err != nil {
+		t.Fatalf("Failed to create new Stream: %v", err)
+	}
 	nonce := make([]byte, s.NonceSize())
 	dw := s.DecryptWriter(ioutil.Discard, nonce, nil)
 	ew := s.EncryptWriter(dw, nonce, nil)
@@ -154,7 +262,10 @@ func TestWriteByteAfterClose(t *testing.T) {
 		w.WriteByte(0)
 	}
 
-	s := NewStream(AES128GCM, BufferSize())
+	s, err := AES_128_GCM.New(make([]byte, 16))
+	if err != nil {
+		t.Fatalf("Failed to create new Stream: %v", err)
+	}
 	nonce := make([]byte, s.NonceSize())
 	dw := s.DecryptWriter(ioutil.Discard, nonce, nil)
 	ew := s.EncryptWriter(dw, nonce, nil)
@@ -175,7 +286,10 @@ func TestReadFromAfterClose(t *testing.T) {
 		w.ReadFrom(bytes.NewReader(nil))
 	}
 
-	s := NewStream(AES128GCM, BufferSize())
+	s, err := AES_128_GCM.New(make([]byte, 16))
+	if err != nil {
+		t.Fatalf("Failed to create new Stream: %v", err)
+	}
 	nonce := make([]byte, s.NonceSize())
 	dw := s.DecryptWriter(ioutil.Discard, nonce, nil)
 	ew := s.EncryptWriter(dw, nonce, nil)
