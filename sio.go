@@ -72,7 +72,9 @@ type algorithm string
 // data streams using the given secret key and AEAD
 // algorithm.
 // The returned Stream uses the default buffer size: BufSize.
-func (a algorithm) New(key []byte) (*Stream, error) {
+func (a algorithm) New(key []byte) (*Stream, error) { return a.newWithBufSize(key, BufSize) }
+
+func (a algorithm) newWithBufSize(key []byte, bufSize int) (*Stream, error) {
 	var (
 		aead cipher.AEAD
 		err  error
@@ -96,7 +98,7 @@ func (a algorithm) New(key []byte) (*Stream, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewStream(aead, BufSize), nil
+	return NewStream(aead, bufSize), nil
 }
 
 func newAESGCM(key []byte) (cipher.AEAD, error) {

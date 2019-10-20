@@ -315,7 +315,7 @@ func FuzzReadByte(data []byte) int {
 
 	plaintext.Reset()
 	dec := rStream.DecryptReader(rStream.EncryptReader(bytes.NewReader(data), nonce, data), nonce, data)
-	if err := copyBytes(plaintext, dec); err != nil {
+	if err := copySingleBytes(plaintext, dec); err != nil {
 		panic(err)
 	}
 	if !bytes.Equal(plaintext.Bytes(), data) {
@@ -323,7 +323,7 @@ func FuzzReadByte(data []byte) int {
 	}
 
 	dec = rStream.DecryptReader(bytes.NewReader(data), nonce, data)
-	if err := copyBytes(discard{}, dec); err != NotAuthentic {
+	if err := copySingleBytes(discard{}, dec); err != NotAuthentic {
 		panic(err)
 	}
 	return 0
@@ -342,7 +342,7 @@ func FuzzWriteByte(data []byte) int {
 
 	plaintext.Reset()
 	enc := wStream.EncryptWriter(wStream.DecryptWriter(plaintext, nonce, data), nonce, data)
-	if err := copyBytes(enc, bytes.NewReader(data)); err != nil {
+	if err := copySingleBytes(enc, bytes.NewReader(data)); err != nil {
 		panic(err)
 	}
 	if err := enc.Close(); err != nil {
@@ -353,7 +353,7 @@ func FuzzWriteByte(data []byte) int {
 	}
 
 	dec := rStream.DecryptWriter(ioutil.Discard, nonce, data)
-	if err := copyBytes(dec, bytes.NewReader(data)); err != NotAuthentic {
+	if err := copySingleBytes(dec, bytes.NewReader(data)); err != NotAuthentic {
 		if cErr := dec.Close(); err != nil || cErr != NotAuthentic {
 			panic(err)
 		}
@@ -390,22 +390,19 @@ func copyBuffer(dst io.Writer, src io.Reader, buf []byte) (int64, error) {
 	return written, err
 }
 
-func copyBytes(dst io.ByteWriter, src io.ByteReader) (err error) {
-	var b byte
+func copySingleBytes(dst io.ByteWriter, src io.ByteReader) error {
 	for {
-		b, err = src.ReadByte()
+		b, err := src.ReadByte()
 		if err == io.EOF {
-			break
+			return nil
 		}
 		if err != nil {
-			return
+			return err
 		}
-		err = dst.WriteByte(b)
-		if err != nil {
-			return
+		if err = dst.WriteByte(b); err != nil {
+			return err
 		}
 	}
-	return nil
 }
 
 type discard struct{}
