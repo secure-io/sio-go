@@ -7,7 +7,6 @@ package sio
 import (
 	"crypto/cipher"
 	"encoding/binary"
-	"errors"
 	"io"
 	"io/ioutil"
 	"math"
@@ -462,7 +461,7 @@ type DecReaderAt struct {
 // a misbehaving producer of encrypted data.
 func (r *DecReaderAt) ReadAt(p []byte, offset int64) (int, error) {
 	if offset < 0 {
-		return 0, errors.New("sio: DecReaderAt.ReadAt: offset is negative")
+		return 0, errorType("sio: DecReaderAt.ReadAt: offset is negative")
 	}
 
 	t := offset / int64(r.bufSize)
