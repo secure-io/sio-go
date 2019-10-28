@@ -13,7 +13,7 @@ import (
 
 func TestVectorRead(t *testing.T) {
 	for i, test := range TestVectors {
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -49,7 +49,7 @@ func TestVectorReadByte(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -81,7 +81,7 @@ func TestVectorWriteTo(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -107,7 +107,7 @@ func TestVectorWriteTo(t *testing.T) {
 
 func TestVectorReadAt(t *testing.T) {
 	for i, test := range TestVectors {
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -131,7 +131,7 @@ func TestVectorReadAtSection(t *testing.T) {
 	for i, test := range TestVectors {
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -150,7 +150,7 @@ func TestVectorReadAtSection(t *testing.T) {
 
 func TestSimpleRead(t *testing.T) {
 	for i, test := range SimpleTests {
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -182,7 +182,7 @@ func TestSimpleReadByte(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -211,7 +211,7 @@ func TestSimpleWriteTo(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -234,7 +234,7 @@ func TestSimpleWriteTo(t *testing.T) {
 
 func TestSimpleReadAt(t *testing.T) {
 	for i, test := range SimpleTests {
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -266,7 +266,7 @@ func TestSimpleReadAtSection(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}

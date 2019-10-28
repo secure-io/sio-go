@@ -26,7 +26,7 @@ func ExampleNewStream_aES128GCM() {
 	// If you want to convert a passphrase to a key, use a suitable
 	// package like argon2 or scrypt.
 	key, _ := hex.DecodeString("4c4d737f2199f3ccb13d2c81dfe38eb8")
-	stream, err := sio.AES_128_GCM.New(key)
+	stream, err := sio.AES_128_GCM.Stream(key)
 	if err != nil {
 		panic(err) // TODO: error handling
 	}
@@ -68,7 +68,7 @@ func ExampleNewStream_aES256GCM() {
 	// If you want to convert a passphrase to a key, use a suitable
 	// package like argon2 or scrypt.
 	key, _ := hex.DecodeString("5b48c6945ae03a93ecc20e38305d2cbe4a177133d83bf4773f1f3be636e2cc4b")
-	stream, err := sio.AES_256_GCM.New(key)
+	stream, err := sio.AES_256_GCM.Stream(key)
 	if err != nil {
 		panic(err) // TODO: error handling
 	}
@@ -90,7 +90,7 @@ func ExampleNewStream_xChaCha20Poly1305() {
 	// package like argon2 or scrypt - or take a look at the sio/sioutil
 	// package.
 	key, _ := hex.DecodeString("f230e700c4f120b623b84ac26cbcb5ae926f44f36589e63745a46ae0ca47137d")
-	stream, err := sio.XChaCha20Poly1305.New(key)
+	stream, err := sio.XChaCha20Poly1305.Stream(key)
 	if err != nil {
 		panic(err) // TODO: error handling
 	}
