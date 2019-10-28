@@ -11,7 +11,7 @@ import (
 )
 
 func BenchmarkEncrypt(b *testing.B) {
-	s, err := AES_128_GCM.New(make([]byte, 16))
+	s, err := AES_128_GCM.Stream(make([]byte, 16))
 	if err != nil {
 		b.Fatalf("Failed to create Stream: %v", err)
 	}
@@ -43,7 +43,7 @@ func BenchmarkEncrypt(b *testing.B) {
 }
 
 func BenchmarkDecrypt(b *testing.B) {
-	s, err := AES_128_GCM.New(make([]byte, 16))
+	s, err := AES_128_GCM.Stream(make([]byte, 16))
 	if err != nil {
 		b.Fatalf("Failed to create Stream: %v", err)
 	}

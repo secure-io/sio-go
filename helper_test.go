@@ -58,7 +58,7 @@ func loadTestVectors(filename string) []TestVector {
 	}
 
 	var vec []struct {
-		Algorithm      algorithm
+		Algorithm      Algorithm
 		BufSize        int
 		Key            string
 		Nonce          string

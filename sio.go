@@ -46,35 +46,37 @@ type errorType string
 
 func (e errorType) Error() string { return string(e) }
 
-// The following constants specify concrete AEAD algorithms
-// which can be used to encrypt and decrypt data streams.
-// Therefore, the non-exported type algorithm defines an
-// exported New function that you can call to create a new
-// Stream:
-//   // New returns a new Stream that encrypts and decrypts
-//   // data streams using the given secret key and AEAD
-//   // algorithm.
-//   // The returned Stream uses the default buffer size: BufSize.
-//   func (a algorithm) NewStream(key []byte) (*Stream, error)
+// The constants above specify concrete AEAD algorithms
+// that can be used to encrypt and decrypt data streams.
 //
 // For example, you can create a new Stream using AES-GCM like this:
-//   stream, err := sio.AES_128_GCM.New(key)
+//   stream, err := sio.AES_128_GCM.Stream(key)
 const (
-	AES_128_GCM       algorithm = "AES-128-GCM"        // The secret key must be 16 bytes long. See: https://golang.org/pkg/crypto/cipher/#NewGCM
-	AES_256_GCM       algorithm = "AES-256-GCM"        // The secret key must be 32 bytes long. See: https://golang.org/pkg/crypto/cipher/#NewGCM
-	ChaCha20Poly1305  algorithm = "ChaCha20-Poly1305"  // The secret key must be 32 bytes long. See: https://godoc.org/golang.org/x/crypto/chacha20poly1305#New
-	XChaCha20Poly1305 algorithm = "XChaCha20-Poly1305" // The secret key must be 32 bytes long. See: https://godoc.org/golang.org/x/crypto/chacha20poly1305#NewX
+	AES_128_GCM       Algorithm = "AES-128-GCM"        // The secret key must be 16 bytes long. See: https://golang.org/pkg/crypto/cipher/#NewGCM
+	AES_256_GCM       Algorithm = "AES-256-GCM"        // The secret key must be 32 bytes long. See: https://golang.org/pkg/crypto/cipher/#NewGCM
+	ChaCha20Poly1305  Algorithm = "ChaCha20-Poly1305"  // The secret key must be 32 bytes long. See: https://godoc.org/golang.org/x/crypto/chacha20poly1305#New
+	XChaCha20Poly1305 Algorithm = "XChaCha20-Poly1305" // The secret key must be 32 bytes long. See: https://godoc.org/golang.org/x/crypto/chacha20poly1305#NewX
 )
 
-type algorithm string
+// Algorithm specifies an AEAD algorithm that
+// can be used to en/decrypt data streams.
+//
+// Its main purpose is to simplify code that
+// wants to use commonly used AEAD algorithms,
+// like AES-GCM, by providing a way to directly
+// create Streams from secret keys.
+type Algorithm string
 
-// New returns a new Stream that encrypts and decrypts
-// data streams using the given secret key and AEAD
-// algorithm.
+// String returns the string representation of an
+// AEAD algorithm.
+func (a Algorithm) String() string { return string(a) }
+
+// Stream returns a new Stream using the given
+// secret key and AEAD algorithm.
 // The returned Stream uses the default buffer size: BufSize.
-func (a algorithm) New(key []byte) (*Stream, error) { return a.newWithBufSize(key, BufSize) }
+func (a Algorithm) Stream(key []byte) (*Stream, error) { return a.streamWithBufSize(key, BufSize) }
 
-func (a algorithm) newWithBufSize(key []byte, bufSize int) (*Stream, error) {
+func (a Algorithm) streamWithBufSize(key []byte, bufSize int) (*Stream, error) {
 	var (
 		aead cipher.AEAD
 		err  error
@@ -94,6 +96,8 @@ func (a algorithm) newWithBufSize(key []byte, bufSize int) (*Stream, error) {
 		aead, err = chacha20poly1305.New(key)
 	case XChaCha20Poly1305:
 		aead, err = chacha20poly1305.NewX(key)
+	default:
+		return nil, errorType("sio: invalid algorithm name")
 	}
 	if err != nil {
 		return nil, err

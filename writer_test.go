@@ -19,7 +19,7 @@ func TestVectorWrite(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -56,7 +56,7 @@ func TestVectorWriteByte(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -93,7 +93,7 @@ func TestVectorReadFrom(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -130,7 +130,7 @@ func TestSimpleWrite(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -165,7 +165,7 @@ func TestSimpleWriteByte(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -200,7 +200,7 @@ func TestSimpleReadFrom(t *testing.T) {
 		ciphertext.Reset()
 		plaintext.Reset()
 
-		stream, err := test.Algorithm.newWithBufSize(test.Key, test.BufSize)
+		stream, err := test.Algorithm.streamWithBufSize(test.Key, test.BufSize)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create new Stream: %v", i, err)
 		}
@@ -237,7 +237,7 @@ func TestWriteAfterClose(t *testing.T) {
 		w.Write(nil)
 	}
 
-	s, err := AES_128_GCM.New(make([]byte, 16))
+	s, err := AES_128_GCM.Stream(make([]byte, 16))
 	if err != nil {
 		t.Fatalf("Failed to create new Stream: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestWriteByteAfterClose(t *testing.T) {
 		w.WriteByte(0)
 	}
 
-	s, err := AES_128_GCM.New(make([]byte, 16))
+	s, err := AES_128_GCM.Stream(make([]byte, 16))
 	if err != nil {
 		t.Fatalf("Failed to create new Stream: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestReadFromAfterClose(t *testing.T) {
 		w.ReadFrom(bytes.NewReader(nil))
 	}
 
-	s, err := AES_128_GCM.New(make([]byte, 16))
+	s, err := AES_128_GCM.Stream(make([]byte, 16))
 	if err != nil {
 		t.Fatalf("Failed to create new Stream: %v", err)
 	}

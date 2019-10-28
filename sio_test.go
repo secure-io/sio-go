@@ -9,7 +9,7 @@ import (
 )
 
 type TestVector struct {
-	Algorithm      algorithm
+	Algorithm      Algorithm
 	BufSize        int
 	Key            []byte
 	Nonce          []byte
@@ -21,7 +21,7 @@ type TestVector struct {
 var TestVectors []TestVector = loadTestVectors("./test_vectors.json")
 
 type SimpleTest struct {
-	Algorithm      algorithm
+	Algorithm      Algorithm
 	BufSize        int
 	Key            []byte
 	Nonce          []byte
