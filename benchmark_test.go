@@ -128,6 +128,9 @@ func benchEncryptReadFrom(b *testing.B, s *Stream, size int64) {
 		if _, err := w.ReadFrom(plaintext); err != nil {
 			panic(err)
 		}
+		if err := w.Close(); err != nil {
+			panic(err)
+		}
 
 		w.seqNum = 1
 		w.offset = 0
@@ -146,6 +149,9 @@ func benchDecryptReadFrom(b *testing.B, s *Stream, size int64) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := w.ReadFrom(plaintext); err != nil {
+			panic(err)
+		}
+		if err := w.Close(); err != nil {
 			panic(err)
 		}
 
