@@ -11,6 +11,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -121,7 +122,7 @@ func FuzzReader(data []byte) int {
 	}
 
 	dec = rStream.DecryptReader(bytes.NewReader(data), nonce, data)
-	if n, err := copyBuffer(ioutil.Discard, dec, buffer); n != 0 || err != NotAuthentic {
+	if n, err := copyBuffer(ioutil.Discard, dec, buffer); n != 0 || !errors.Is(err, NotAuthentic) {
 		panic(fmt.Sprintf("N: %d, Err: %v", n, err))
 	}
 	return 0
@@ -157,7 +158,7 @@ func FuzzReaderAt(data []byte) int {
 
 	if len(data) > 0 {
 		r := io.NewSectionReader(rStream.DecryptReaderAt(bytes.NewReader(data), nonce, data), 0, int64(len(data)))
-		if n, err := copyBuffer(ioutil.Discard, r, buffer); n != 0 || err != NotAuthentic {
+		if n, err := copyBuffer(ioutil.Discard, r, buffer); n != 0 || !errors.Is(err, NotAuthentic) {
 			panic(fmt.Sprintf("N: %d, Err: %v", n, err))
 		}
 	}
@@ -200,7 +201,7 @@ func FuzzWriteTo(data []byte) int {
 	}
 
 	dec = rStream.DecryptReader(bytes.NewReader(data), nonce, data)
-	if n, err := dec.WriteTo(ioutil.Discard); n != 0 || err != NotAuthentic {
+	if n, err := dec.WriteTo(ioutil.Discard); n != 0 || !errors.Is(err, NotAuthentic) {
 		panic(fmt.Sprintf("N: %d, Err: %v", n, err))
 	}
 	return 0
@@ -247,8 +248,8 @@ func FuzzWrite(data []byte) int {
 	}
 
 	dec = wStream.DecryptWriter(ioutil.Discard, nonce, data)
-	if _, err := copyBuffer(dec, bytes.NewReader(data), buffer); err != NotAuthentic {
-		if cErr := dec.Close(); err != nil || cErr != NotAuthentic {
+	if _, err := copyBuffer(dec, bytes.NewReader(data), buffer); !errors.Is(err, NotAuthentic) {
+		if cErr := dec.Close(); err != nil || !errors.Is(cErr, NotAuthentic) {
 			panic(fmt.Sprintf("Write: %v, Close: %v", err, cErr))
 		}
 	}
@@ -294,8 +295,8 @@ func FuzzReadFrom(data []byte) int {
 	}
 
 	dec = wStream.DecryptWriter(ioutil.Discard, nonce, data)
-	if _, err := dec.ReadFrom(bytes.NewReader(data)); err != NotAuthentic {
-		if cErr := dec.Close(); err != nil || cErr != NotAuthentic {
+	if _, err := dec.ReadFrom(bytes.NewReader(data)); !errors.Is(err, NotAuthentic) {
+		if cErr := dec.Close(); err != nil || !errors.Is(cErr, NotAuthentic) {
 			panic(fmt.Sprintf("Write: %v, Close: %v", err, cErr))
 		}
 	}
@@ -323,7 +324,7 @@ func FuzzReadByte(data []byte) int {
 	}
 
 	dec = rStream.DecryptReader(bytes.NewReader(data), nonce, data)
-	if err := copySingleBytes(discard{}, dec); err != NotAuthentic {
+	if err := copySingleBytes(discard{}, dec); !errors.Is(err, NotAuthentic) {
 		panic(err)
 	}
 	return 0
@@ -353,8 +354,8 @@ func FuzzWriteByte(data []byte) int {
 	}
 
 	dec := rStream.DecryptWriter(ioutil.Discard, nonce, data)
-	if err := copySingleBytes(dec, bytes.NewReader(data)); err != NotAuthentic {
-		if cErr := dec.Close(); err != nil || cErr != NotAuthentic {
+	if err := copySingleBytes(dec, bytes.NewReader(data)); !errors.Is(err, NotAuthentic) {
+		if cErr := dec.Close(); err != nil || !errors.Is(cErr, NotAuthentic) {
 			panic(err)
 		}
 	}

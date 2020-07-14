@@ -315,7 +315,7 @@ func (w *DecWriter) Write(p []byte) (n int, err error) {
 		}
 		plaintext, err := w.cipher.Open(w.buffer[:0], nonce, w.buffer, w.associatedData)
 		if err != nil {
-			w.err = NotAuthentic
+			w.err = sioErrorWithCause(NotAuthentic, err)
 			return n, w.err
 		}
 		if _, err = writeTo(w.w, plaintext); err != nil {
@@ -332,7 +332,7 @@ func (w *DecWriter) Write(p []byte) (n int, err error) {
 		}
 		plaintext, err := w.cipher.Open(w.buffer[:0], nonce, p[:ciphertextLen], w.associatedData)
 		if err != nil {
-			w.err = NotAuthentic
+			w.err = sioErrorWithCause(NotAuthentic, err)
 			return n, w.err
 		}
 		if _, err = writeTo(w.w, plaintext); err != nil {
@@ -383,7 +383,7 @@ func (w *DecWriter) WriteByte(b byte) error {
 	}
 	plaintext, err := w.cipher.Open(w.buffer[:0], nonce, w.buffer, w.associatedData)
 	if err != nil {
-		w.err = NotAuthentic
+		w.err = sioErrorWithCause(NotAuthentic, err)
 		return w.err
 	}
 	if _, err = writeTo(w.w, plaintext); err != nil {
@@ -418,7 +418,7 @@ func (w *DecWriter) Close() error {
 		binary.LittleEndian.PutUint32(w.nonce[w.cipher.NonceSize()-4:], w.seqNum)
 		plaintext, err := w.cipher.Open(w.buffer[:0], w.nonce, w.buffer[:w.offset], w.associatedData)
 		if err != nil {
-			w.err = NotAuthentic
+			w.err = sioErrorWithCause(NotAuthentic, err)
 			return w.err
 		}
 		if _, w.err = writeTo(w.w, plaintext); w.err != nil {
@@ -479,7 +479,7 @@ func (w *DecWriter) ReadFrom(r io.Reader) (int64, error) {
 	}
 	plaintext, err := w.cipher.Open(buffer[:0], nonce, buffer[:ciphertextLen], w.associatedData)
 	if err != nil {
-		w.err = NotAuthentic
+		w.err = sioErrorWithCause(NotAuthentic, err)
 		return int64(nn), w.err
 	}
 	if _, err = writeTo(w.w, plaintext); err != nil {
@@ -509,7 +509,7 @@ func (w *DecWriter) ReadFrom(r io.Reader) (int64, error) {
 		}
 		plaintext, err = w.cipher.Open(buffer[:0], nonce, buffer[:ciphertextLen], w.associatedData)
 		if err != nil {
-			w.err = NotAuthentic
+			w.err = sioErrorWithCause(NotAuthentic, err)
 			return n, w.err
 		}
 		if _, err = writeTo(w.w, plaintext); err != nil {

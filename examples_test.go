@@ -9,6 +9,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -156,7 +157,7 @@ func ExampleDecReader() {
 
 	// Reading from r returns the original plaintext (or an error).
 	if _, err := ioutil.ReadAll(r); err != nil {
-		if err == sio.NotAuthentic {
+		if errors.Is(err, sio.NotAuthentic) {
 			// Read data is not authentic -> ciphertext has been modified.
 			// TODO: error handling
 			panic(err)
@@ -190,7 +191,7 @@ func ExampleDecReaderAt() {
 
 	// Reading from section returns the original plaintext (or an error).
 	if _, err := ioutil.ReadAll(section); err != nil {
-		if err == sio.NotAuthentic {
+		if errors.Is(err, sio.NotAuthentic) {
 			// Read data is not authentic -> ciphertext has been modified.
 			// TODO: error handling
 			panic(err)
@@ -261,7 +262,7 @@ func ExampleDecWriter() {
 	w := stream.DecryptWriter(plaintext, nonce, associatedData)
 	defer func() {
 		if err := w.Close(); err != nil {
-			if err == sio.NotAuthentic { // During Close() the DecWriter may detect unauthentic data -> decryption error.
+			if errors.Is(err, sio.NotAuthentic) { // During Close() the DecWriter may detect unauthentic data -> decryption error.
 				panic(err) // TODO: error handling
 			}
 			panic(err) // TODO: error handling
@@ -274,7 +275,7 @@ func ExampleDecWriter() {
 	// the underlying io.Writer (i.e. the plaintext *bytes.Buffer) or
 	// returns an error.
 	if _, err := w.Write(ciphertext); err != nil {
-		if err == sio.NotAuthentic {
+		if errors.Is(err, sio.NotAuthentic) {
 			// Read data is not authentic -> ciphertext has been modified.
 			// TODO: error handling
 			panic(err)

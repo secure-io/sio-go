@@ -6,10 +6,64 @@ package sio
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"errors"
 	"io"
+	"io/ioutil"
 	"math"
 	"testing"
 )
+
+func TestWrappedDecryptReaderError(t *testing.T) {
+	block, err := aes.NewCipher(make([]byte, 32))
+	if err != nil {
+		t.Fatal("NewCipher:", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatal("NewGCM:", err)
+	}
+	stream := NewStream(gcm, BufSize)
+	eofReader := bytes.NewBuffer(nil)
+	decR := stream.DecryptReader(eofReader, make([]byte, stream.NonceSize()), nil)
+	_, err = decR.ReadByte()
+	if err == nil {
+		t.Fatal("ReadByte: expected error but suceeded")
+	}
+	if !errors.Is(err, NotAuthentic) {
+		t.Fatalf("expected NotAuhtentic but was %T: %#v", err, err)
+	}
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("expected io.EOF but was %T: %#v", err, err)
+	}
+}
+
+func TestWrappedDecryptWriterError(t *testing.T) {
+	block, err := aes.NewCipher(make([]byte, 32))
+	if err != nil {
+		t.Fatal("NewCipher:", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatal("NewGCM:", err)
+	}
+	stream := NewStream(gcm, BufSize)
+	decW := stream.DecryptWriter(ioutil.Discard, make([]byte, stream.NonceSize()), nil)
+	_, err = decW.Write(make([]byte, stream.bufSize*2))
+	if err == nil {
+		t.Fatal("ReadByte: expected error but suceeded")
+	}
+	if !errors.Is(err, NotAuthentic) {
+		t.Fatalf("expected NotAuhtentic but was %T: %#v", err, err)
+	}
+	var e SioError
+	if errors.As(err, &e) {
+		if e.Unwrap().Error() == "" {
+			t.Fatalf("expected non-empty error cause")
+		}
+	}
+}
 
 func TestVectorRead(t *testing.T) {
 	for i, test := range TestVectors {

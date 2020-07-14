@@ -10,6 +10,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
 	"sync"
@@ -25,12 +26,40 @@ const (
 	BufSize = 1 << 14
 )
 
-const (
+type SioError struct {
+	msg   string
+	cause error
+}
+
+func (s SioError) Error() string {
+	if s.cause == nil {
+		return s.msg
+	}
+	return fmt.Sprintf("%s: %s", s.msg, s.cause.Error())
+}
+
+func (s SioError) Unwrap() error {
+	return s.cause
+}
+
+func (s SioError) Is(target error) bool {
+	t, ok := target.(SioError)
+	return ok && s.msg == t.msg
+}
+
+func sioErrorWithCause(s SioError, cause error) SioError {
+	s.cause = cause
+	return s
+}
+
+var (
 	// NotAuthentic is returned when the decryption of a data stream fails.
 	// It indicates that the encrypted data is invalid - i.e. it has been
 	// (maliciously) modified.
-	NotAuthentic errorType = "sio: data is not authentic"
+	NotAuthentic = SioError{msg: "sio: data is not authentic"}
+)
 
+const (
 	// ErrExceeded is returned when no more data can be encrypted /
 	// decrypted securely. It indicates that the data stream is too
 	// large to be encrypted / decrypted with a single key-nonce
