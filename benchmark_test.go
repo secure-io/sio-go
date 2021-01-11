@@ -242,7 +242,7 @@ func benchEncryptWriteTo(b *testing.B, s *Stream, size int64) {
 	plaintext := &io.LimitedReader{R: DevNull, N: size}
 
 	r := s.EncryptReader(plaintext, nonce, nil)
-	b.SetBytes(size)
+	b.SetBytes(2*size + s.Overhead(size))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := r.WriteTo(DevNull); err != nil {
@@ -264,7 +264,7 @@ func benchDecryptWriteTo(b *testing.B, s *Stream, size int64) {
 
 	sr := s.EncryptReader(plaintext, nonce, nil)
 	r := s.DecryptReader(sr, nonce, nil)
-	b.SetBytes(size)
+	b.SetBytes(2 * size)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := r.WriteTo(DevNull); err != nil {
