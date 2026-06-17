@@ -176,23 +176,24 @@ func (w *EncWriter) Close() error {
 	if w.err != nil && w.err != ErrExceeded {
 		return w.err
 	}
-	if !w.closed {
-		if w.seqNum == 0 {
-			w.err = ErrExceeded
-			return w.err
-		}
-		w.closed = true
+	if w.closed {
+		return nil
+	}
+	if w.seqNum == 0 {
+		w.err = ErrExceeded
+		return w.err
+	}
+	w.closed = true
 
-		w.associatedData[0] = 0x80
-		binary.LittleEndian.PutUint32(w.nonce[w.cipher.NonceSize()-4:], w.seqNum)
-		ciphertext := w.cipher.Seal(w.buffer[:0], w.nonce, w.buffer[:w.offset], w.associatedData)
-		if _, w.err = writeTo(w.w, ciphertext); w.err != nil {
-			return w.err
-		}
-		if c, ok := w.w.(io.Closer); ok {
-			w.err = c.Close()
-			return w.err
-		}
+	w.associatedData[0] = 0x80
+	binary.LittleEndian.PutUint32(w.nonce[w.cipher.NonceSize()-4:], w.seqNum)
+	ciphertext := w.cipher.Seal(w.buffer[:0], w.nonce, w.buffer[:w.offset], w.associatedData)
+	if _, w.err = writeTo(w.w, ciphertext); w.err != nil {
+		return w.err
+	}
+	if c, ok := w.w.(io.Closer); ok {
+		w.err = c.Close()
+		return w.err
 	}
 	return nil
 }
@@ -468,27 +469,28 @@ func (w *DecWriter) Close() error {
 	if w.err != nil && w.err != ErrExceeded {
 		return w.err
 	}
-	if !w.closed {
-		if w.seqNum == 0 {
-			w.err = ErrExceeded
-			return w.err
-		}
-		w.closed = true
+	if w.closed {
+		return nil
+	}
+	if w.seqNum == 0 {
+		w.err = ErrExceeded
+		return w.err
+	}
+	w.closed = true
 
-		w.associatedData[0] = 0x80
-		binary.LittleEndian.PutUint32(w.nonce[w.cipher.NonceSize()-4:], w.seqNum)
-		plaintext, err := w.cipher.Open(w.buffer[:0], w.nonce, w.buffer[:w.offset], w.associatedData)
-		if err != nil {
-			w.err = NotAuthentic
-			return w.err
-		}
-		if _, w.err = writeTo(w.w, plaintext); w.err != nil {
-			return w.err
-		}
-		if c, ok := w.w.(io.Closer); ok {
-			w.err = c.Close()
-			return w.err
-		}
+	w.associatedData[0] = 0x80
+	binary.LittleEndian.PutUint32(w.nonce[w.cipher.NonceSize()-4:], w.seqNum)
+	plaintext, err := w.cipher.Open(w.buffer[:0], w.nonce, w.buffer[:w.offset], w.associatedData)
+	if err != nil {
+		w.err = NotAuthentic
+		return w.err
+	}
+	if _, w.err = writeTo(w.w, plaintext); w.err != nil {
+		return w.err
+	}
+	if c, ok := w.w.(io.Closer); ok {
+		w.err = c.Close()
+		return w.err
 	}
 	return nil
 }
@@ -522,7 +524,7 @@ func (w *DecWriter) ReadFrom(r io.Reader) (int64, error) {
 	ciphertextLen := w.bufSize + w.cipher.Overhead()
 	buffer := w.buffer[:1+ciphertextLen]
 
-	nn, err := readFrom(r, buffer[:1+ciphertextLen])
+	nn, err := readFrom(r, buffer)
 	if err == io.EOF {
 		w.offset = nn
 		return int64(nn), nil
