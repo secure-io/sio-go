@@ -330,9 +330,10 @@ func (s *Stream) DecryptReaderAt(r io.ReaderAt, nonce, associatedData []byte) *D
 	binary.LittleEndian.PutUint32(dr.nonce[s.NonceSize():], 0)
 	dr.cipher.Seal(dr.associatedData[1:1], dr.nonce, nil, associatedData)
 
+	bufLen := 1 + dr.bufSize + dr.cipher.Overhead()
 	dr.bufPool = sync.Pool{
 		New: func() interface{} {
-			b := make([]byte, 1+dr.bufSize+dr.cipher.Overhead())
+			b := make([]byte, bufLen)
 			return &b
 		},
 	}
