@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 
 	"github.com/secure-io/sio-go"
@@ -34,7 +33,7 @@ func ExampleNewStream_aES128GCM() {
 	// Print the nonce size for Stream (with AES-128-GCM) and the overhead added
 	// when encrypting a 1 MiB data stream.
 	fmt.Printf("NonceSize: %d, Overhead: %d", stream.NonceSize(), stream.Overhead(1024*1024))
-	//Output: NonceSize: 8, Overhead: 1024
+	// Output: NonceSize: 8, Overhead: 1024
 }
 
 func ExampleNewStream_aES192GCM() {
@@ -56,7 +55,7 @@ func ExampleNewStream_aES192GCM() {
 	// Print the nonce size for Stream (with AES-192-GCM) and the overhead added
 	// when encrypting a 1 MiB data stream.
 	fmt.Printf("NonceSize: %d, Overhead: %d", stream.NonceSize(), stream.Overhead(1024*1024))
-	//Output: NonceSize: 8, Overhead: 1024
+	// Output: NonceSize: 8, Overhead: 1024
 }
 
 func ExampleNewStream_aES256GCM() {
@@ -76,7 +75,7 @@ func ExampleNewStream_aES256GCM() {
 	// Print the nonce size for Stream (with AES-256-GCM) and the overhead added
 	// when encrypting a 1 MiB data stream.
 	fmt.Printf("NonceSize: %d, Overhead: %d", stream.NonceSize(), stream.Overhead(1024*1024))
-	//Output: NonceSize: 8, Overhead: 1024
+	// Output: NonceSize: 8, Overhead: 1024
 }
 
 func ExampleNewStream_xChaCha20Poly1305() {
@@ -98,7 +97,7 @@ func ExampleNewStream_xChaCha20Poly1305() {
 	// Print the nonce size for Stream (with XChaCha20-Poly1305) and the
 	// overhead added when encrypting a 1 MiB data stream.
 	fmt.Printf("NonceSize: %d, Overhead: %d", stream.NonceSize(), stream.Overhead(1024*1024))
-	//Output: NonceSize: 20, Overhead: 1024
+	// Output: NonceSize: 20, Overhead: 1024
 }
 
 func ExampleEncReader() {
@@ -107,15 +106,13 @@ func ExampleEncReader() {
 	// from a master key using e.g. HKDF.
 	// Obviously don't use this example key for anything real.
 	key, _ := hex.DecodeString("ffb0823fcab82a983e1725e003c702252ef4fc7054796b3c23d08aa189f662c9")
-	block, _ := aes.NewCipher(key)
-	gcm, _ := cipher.NewGCM(block)
-	stream := sio.NewStream(gcm, sio.BufSize)
+	stream, _ := sio.AES_256_GCM.Stream(key)
 
 	var (
 		// Use a unique nonce per key. If you choose an unique key
 		// you can also set the nonce to all zeros. (What to prefer
 		// depends on the application).
-		nonce []byte = make([]byte, stream.NonceSize())
+		nonce = make([]byte, stream.NonceSize())
 
 		// If you want to bind additional data to the ciphertext
 		// (e.g. a file name to prevent renaming / moving the file)
@@ -129,22 +126,20 @@ func ExampleEncReader() {
 	r := stream.EncryptReader(plaintext, nonce, associatedData)
 
 	// Reading from r returns encrypted and authenticated data.
-	ioutil.ReadAll(r)
-	//Output:
+	io.ReadAll(r)
+	// Output:
 }
 
 func ExampleDecReader() {
 	// Use the key used to encrypt the data. (See e.g. the EncReader example).
 	// Obviously don't use this example key for anything real.
 	key, _ := hex.DecodeString("ffb0823fcab82a983e1725e003c702252ef4fc7054796b3c23d08aa189f662c9")
-	block, _ := aes.NewCipher(key)
-	gcm, _ := cipher.NewGCM(block)
-	stream := sio.NewStream(gcm, sio.BufSize)
+	stream, _ := sio.AES_256_GCM.Stream(key)
 
 	var (
 		// Use the nonce value using during encryption.
 		// (See e.g. the EncWriter example).
-		nonce []byte = make([]byte, stream.NonceSize())
+		nonce = make([]byte, stream.NonceSize())
 
 		// Use the associated data using during encryption.
 		// (See e.g. the EncWriter example).
@@ -155,28 +150,26 @@ func ExampleDecReader() {
 	r := stream.DecryptReader(ciphertext, nonce, associatedData)
 
 	// Reading from r returns the original plaintext (or an error).
-	if _, err := ioutil.ReadAll(r); err != nil {
+	if _, err := io.ReadAll(r); err != nil {
 		if err == sio.NotAuthentic {
 			// Read data is not authentic -> ciphertext has been modified.
 			// TODO: error handling
 			panic(err)
 		}
 	}
-	//Output:
+	// Output:
 }
 
 func ExampleDecReaderAt() {
 	// Use the key used to encrypt the data. (See e.g. the EncReader example).
 	// Obviously don't use this example key for anything real.
 	key, _ := hex.DecodeString("ffb0823fcab82a983e1725e003c702252ef4fc7054796b3c23d08aa189f662c9")
-	block, _ := aes.NewCipher(key)
-	gcm, _ := cipher.NewGCM(block)
-	stream := sio.NewStream(gcm, sio.BufSize)
+	stream, _ := sio.AES_256_GCM.Stream(key)
 
 	var (
 		// Use the nonce value using during encryption.
 		// (See e.g. the EncWriter example).
-		nonce []byte = make([]byte, stream.NonceSize())
+		nonce = make([]byte, stream.NonceSize())
 
 		// Use the associated data using during encryption.
 		// (See e.g. the EncWriter example).
@@ -189,14 +182,14 @@ func ExampleDecReaderAt() {
 	section := io.NewSectionReader(r, 5, 9) // Read the 'plaintext' substring from 'some plaintext'
 
 	// Reading from section returns the original plaintext (or an error).
-	if _, err := ioutil.ReadAll(section); err != nil {
+	if _, err := io.ReadAll(section); err != nil {
 		if err == sio.NotAuthentic {
 			// Read data is not authentic -> ciphertext has been modified.
 			// TODO: error handling
 			panic(err)
 		}
 	}
-	//Output:
+	// Output:
 }
 
 func ExampleEncWriter() {
@@ -205,15 +198,13 @@ func ExampleEncWriter() {
 	// from a master key using e.g. HKDF.
 	// Obviously don't use this example key for anything real.
 	key, _ := hex.DecodeString("ffb0823fcab82a983e1725e003c702252ef4fc7054796b3c23d08aa189f662c9")
-	block, _ := aes.NewCipher(key)
-	gcm, _ := cipher.NewGCM(block)
-	stream := sio.NewStream(gcm, sio.BufSize)
+	stream, _ := sio.AES_256_GCM.Stream(key)
 
 	var (
 		// Use a unique nonce per key. If you choose an unique key
 		// you can also set the nonce to all zeros. (What to prefer
 		// depends on the application).
-		nonce []byte = make([]byte, stream.NonceSize())
+		nonce = make([]byte, stream.NonceSize())
 
 		// If you want to bind additional data to the ciphertext
 		// (e.g. a file name to prevent renaming / moving the file)
@@ -236,21 +227,19 @@ func ExampleEncWriter() {
 	if _, err := io.WriteString(w, "some plaintext"); err != nil {
 		// TODO: error handling
 	}
-	//Output:
+	// Output:
 }
 
 func ExampleDecWriter() {
 	// Use the key used to encrypt the data. (See e.g. the EncWriter example).
 	// Obviously don't use this example key for anything real.
 	key, _ := hex.DecodeString("ffb0823fcab82a983e1725e003c702252ef4fc7054796b3c23d08aa189f662c9")
-	block, _ := aes.NewCipher(key)
-	gcm, _ := cipher.NewGCM(block)
-	stream := sio.NewStream(gcm, sio.BufSize)
+	stream, _ := sio.AES_256_GCM.Stream(key)
 
 	var (
 		// Use the nonce value using during encryption.
 		// (See e.g. the EncWriter example).
-		nonce []byte = make([]byte, stream.NonceSize())
+		nonce = make([]byte, stream.NonceSize())
 
 		// Use the associated data using during encryption.
 		// (See e.g. the EncWriter example).
@@ -280,5 +269,36 @@ func ExampleDecWriter() {
 			panic(err)
 		}
 	}
-	//Output:
+	// Output:
+}
+
+func ExampleEncReader_Reset() {
+	// Use an unique key per data stream. For example derive one
+	// from a password using a suitable package like argon2 or
+	// from a master key using e.g. HKDF.
+	// Obviously don't use this example key for anything real.
+	key, _ := hex.DecodeString("ffb0823fcab82a983e1725e003c702252ef4fc7054796b3c23d08aa189f662c9")
+	stream, _ := sio.AES_256_GCM.Stream(key)
+
+	var (
+		// Use a unique nonce per key. If you choose an unique key
+		// you can also set the nonce to all zeros. (What to prefer
+		// depends on the application).
+		nonce = make([]byte, stream.NonceSize())
+
+		// If you want to bind additional data to the ciphertext
+		// (e.g. a file name to prevent renaming / moving the file)
+		// set the associated data. But be aware that the associated
+		// data is not encrypted (only authenticated) and must be
+		// available when decrypting the ciphertext again.
+		associatedData []byte = nil
+	)
+
+	plaintext := strings.NewReader("this is the beginning of the 7th plaintext block")
+	r := stream.EncryptReader(plaintext, nonce, associatedData)
+	r.Reset(6) // Start encrypting at the 7th data block
+
+	// Reading from r returns encrypted and authenticated data starting at 7.
+	io.ReadAll(r)
+	// Output:
 }

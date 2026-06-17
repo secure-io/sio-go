@@ -8,7 +8,6 @@ import (
 	"crypto/cipher"
 	"encoding/binary"
 	"io"
-	"io/ioutil"
 	"math"
 	"sync"
 )
@@ -31,6 +30,36 @@ type EncReader struct {
 	err               error
 	carry             byte
 	firstRead, closed bool
+}
+
+// Reset re-positions the EncReader to start encrypting at the
+// data block identified by blockNum. Data blocks are 0-indexed.
+// So, the 1st data block has blockNum=0, the 2nd has blockNum=1,
+// and so on.
+//
+// Reset allows re-creation of ciphertext sections. The most common
+// use case is setting the EncReader to start at a specific block
+// right after creation. For example:
+//
+//	enc := stream.EncryptReader(plaintextSuffix, nonce, associatedData)
+//	enc.Reset(10) // Move the EncReader to the 11-th block
+//
+//	_, err := dec.WriteTo(ciphertextSuffix)
+//
+// For most use cases, Reset is not needed and incorrect usage of
+// Reset can break the security guarantees the encryption scheme
+// provides. In particular, EncReader must never encrypt two different
+// plaintext blocks given the same blockNum.
+func (r *EncReader) Reset(blockNum uint32) {
+	r.seqNum = blockNum + 1
+	binary.LittleEndian.PutUint32(r.nonce[len(r.nonce)-4:], 0)
+	r.associatedData[0] = 0x00
+
+	clear(r.buffer)
+	r.offset = 0
+
+	r.carry, r.err = 0, nil
+	r.firstRead, r.closed = true, false
 }
 
 // Read behaves as specified by the io.Reader interface.
@@ -218,6 +247,31 @@ type DecReader struct {
 	err               error
 	carry             byte
 	firstRead, closed bool
+}
+
+// Reset re-positions the DecReader to start decrypting at the
+// data block identified by blockNum. Data blocks are 0-indexed.
+// So, the 1st data block has blockNum=0, the 2nd has blockNum=1,
+// and so on.
+//
+// Reset allows re-creation of plaintext sections. The most common
+// use case is setting the DecReader to start at a specific block
+// right after creation. For example:
+//
+//	dec := stream.DecryptReader(ciphertextSuffix, nonce, associatedData)
+//	dec.Reset(10) // Move the DecReader to the 11-th block
+//
+//	_, err := dec.WriteTo(plaintextSuffix)
+func (r *DecReader) Reset(blockNum uint32) {
+	r.seqNum = blockNum + 1
+	binary.LittleEndian.PutUint32(r.nonce[len(r.nonce)-4:], 0)
+	r.associatedData[0] = 0x00
+
+	clear(r.buffer)
+	r.offset = 0
+
+	r.carry, r.err = 0, nil
+	r.firstRead, r.closed = true, false
 }
 
 // Read behaves like specified by the io.Reader interface.
@@ -486,7 +540,7 @@ func (r *DecReaderAt) ReadAt(p []byte, offset int64) (int, error) {
 	copy(decReader.associatedData, r.associatedData)
 
 	if k := offset % int64(r.bufSize); k > 0 {
-		if _, err := io.CopyN(ioutil.Discard, &decReader, k); err != nil {
+		if _, err := io.CopyN(io.Discard, &decReader, k); err != nil {
 			return 0, err
 		}
 	}

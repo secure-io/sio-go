@@ -37,6 +37,35 @@ type EncWriter struct {
 	closed bool
 }
 
+// Reset re-positions the EncWriter to start encrypting at the
+// data block identified by blockNum. Data blocks are 0-indexed.
+// So, the 1st data block has blockNum=0, the 2nd has blockNum=1,
+// and so on.
+//
+// Reset allows re-creation of ciphertext sections. The most common
+// use case is setting the EncWriter to start at a specific block
+// right after creation. For example:
+//
+//	enc := stream.EncryptWriter(ciphertextSuffix, nonce, associatedData)
+//	enc.Reset(10) // Move the EncWriter to the 11-th block
+//
+//	_, err := enc.Write(plaintextSuffix)
+//
+// For most use cases, Reset is not needed and incorrect usage of
+// Reset can break the security guarantees the encryption scheme
+// provides. In particular, EncWriter must never encrypt two different
+// plaintext blocks given the same blockNum.
+func (w *EncWriter) Reset(blockNum uint32) {
+	w.seqNum = blockNum + 1
+	binary.LittleEndian.PutUint32(w.nonce[len(w.nonce)-4:], 0)
+	w.associatedData[0] = 0x00
+
+	clear(w.buffer)
+	w.offset = 0
+
+	w.err, w.closed = nil, false
+}
+
 // Write behaves as specified by the io.Writer interface.
 // In particular, Write encrypts len(p) bytes from p and
 // writes the encrypted bytes to the underlying data stream. It
@@ -148,6 +177,10 @@ func (w *EncWriter) Close() error {
 		return w.err
 	}
 	if !w.closed {
+		if w.seqNum == 0 {
+			w.err = ErrExceeded
+			return w.err
+		}
 		w.closed = true
 
 		w.associatedData[0] = 0x80
@@ -273,6 +306,30 @@ type DecWriter struct {
 
 	err    error
 	closed bool
+}
+
+// Reset re-positions the DecWriter to start decrypting at the
+// data block identified by blockNum. Data blocks are 0-indexed.
+// So, the 1st data block has blockNum=0, the 2nd has blockNum=1,
+// and so on.
+//
+// Reset allows re-creation of plaintext sections. The most common
+// use case is setting the DecWriter to start at a specific block
+// right after creation. For example:
+//
+//	dec := stream.DecryptWriter(plaintextSuffix, nonce, associatedData)
+//	dec.Reset(10) // Move the DecWriter to the 11-th block
+//
+//	_, err := dec.Write(ciphertextSuffix)
+func (w *DecWriter) Reset(blockNum uint32) {
+	w.seqNum = blockNum + 1
+	binary.LittleEndian.PutUint32(w.nonce[len(w.nonce)-4:], 0)
+	w.associatedData[0] = 0x00
+
+	clear(w.buffer)
+	w.offset = 0
+
+	w.err, w.closed = nil, false
 }
 
 // Write behaves as specified by the io.Writer interface.
@@ -412,6 +469,10 @@ func (w *DecWriter) Close() error {
 		return w.err
 	}
 	if !w.closed {
+		if w.seqNum == 0 {
+			w.err = ErrExceeded
+			return w.err
+		}
 		w.closed = true
 
 		w.associatedData[0] = 0x80

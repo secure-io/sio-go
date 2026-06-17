@@ -9,8 +9,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	mrand "math/rand"
+	"os"
 )
 
 var DevNull = devNull{}
@@ -52,7 +52,7 @@ func copyBytes(dst io.ByteWriter, src io.ByteReader) error {
 }
 
 func loadTestVectors(filename string) []TestVector {
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		panic(err)
 	}

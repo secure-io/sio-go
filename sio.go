@@ -50,7 +50,8 @@ func (e errorType) Error() string { return string(e) }
 // that can be used to encrypt and decrypt data streams.
 //
 // For example, you can create a new Stream using AES-GCM like this:
-//   stream, err := sio.AES_128_GCM.Stream(key)
+//
+//	stream, err := sio.AES_128_GCM.Stream(key)
 const (
 	AES_128_GCM       Algorithm = "AES-128-GCM"        // The secret key must be 16 bytes long. See: https://golang.org/pkg/crypto/cipher/#NewGCM
 	AES_256_GCM       Algorithm = "AES-256-GCM"        // The secret key must be 32 bytes long. See: https://golang.org/pkg/crypto/cipher/#NewGCM
@@ -150,9 +151,9 @@ func (s *Stream) NonceSize() int { return s.cipher.NonceSize() - 4 }
 // data stream. For a plaintext stream of a non-negative
 // size, the size of an encrypted data stream will be:
 //
-//   encSize = size + stream.Overhead(size) // 0 <= size <= (2³² - 1) * bufSize
-//         0 = stream.Overhead(size)        // size > (2³² - 1) * bufSize
-//        -1 = stream.Overhead(size)        // size < 0
+//	encSize = size + stream.Overhead(size) // 0 <= size <= (2³² - 1) * bufSize
+//	      0 = stream.Overhead(size)        // size > (2³² - 1) * bufSize
+//	     -1 = stream.Overhead(size)        // size < 0
 //
 // In general, the size of an encrypted data stream is
 // always greater than the size of the corresponding
@@ -193,7 +194,8 @@ func (s *Stream) Overhead(size int64) int64 {
 // and not written to w. Instead, the same associatedData must
 // be provided when decrypting the data stream again. It is
 // safe to set:
-//   associatedData = nil
+//
+//	associatedData = nil
 func (s *Stream) EncryptWriter(w io.Writer, nonce, associatedData []byte) *EncWriter {
 	if len(nonce) != s.NonceSize() {
 		panic("sio: nonce has invalid length")
@@ -252,7 +254,8 @@ func (s *Stream) DecryptWriter(w io.Writer, nonce, associatedData []byte) *DecWr
 // and not written to w. Instead, the same associatedData must
 // be provided when decrypting the data stream again. It is
 // safe to set:
-//   associatedData = nil
+//
+//	associatedData = nil
 func (s *Stream) EncryptReader(r io.Reader, nonce, associatedData []byte) *EncReader {
 	if len(nonce) != s.NonceSize() {
 		panic("sio: nonce has invalid length")
@@ -261,6 +264,7 @@ func (s *Stream) EncryptReader(r io.Reader, nonce, associatedData []byte) *EncRe
 		r:              r,
 		cipher:         s.cipher,
 		bufSize:        s.bufSize,
+		seqNum:         1,
 		nonce:          make([]byte, s.cipher.NonceSize()),
 		associatedData: make([]byte, 1+s.cipher.Overhead()),
 		buffer:         make([]byte, 1+s.bufSize+s.cipher.Overhead()),
@@ -268,9 +272,8 @@ func (s *Stream) EncryptReader(r io.Reader, nonce, associatedData []byte) *EncRe
 	}
 	copy(er.nonce, nonce)
 	er.associatedData[0] = 0x00
-	binary.LittleEndian.PutUint32(er.nonce[er.cipher.NonceSize()-4:], er.seqNum)
+	binary.LittleEndian.PutUint32(er.nonce[er.cipher.NonceSize()-4:], 0)
 	er.cipher.Seal(er.associatedData[1:1], er.nonce, nil, associatedData)
-	er.seqNum = 1
 	return er
 }
 
@@ -290,6 +293,7 @@ func (s *Stream) DecryptReader(r io.Reader, nonce, associatedData []byte) *DecRe
 		r:              r,
 		cipher:         s.cipher,
 		bufSize:        s.bufSize,
+		seqNum:         1,
 		nonce:          make([]byte, s.cipher.NonceSize()),
 		associatedData: make([]byte, 1+s.cipher.Overhead()),
 		buffer:         make([]byte, 1+s.bufSize+s.cipher.Overhead()),
@@ -297,9 +301,8 @@ func (s *Stream) DecryptReader(r io.Reader, nonce, associatedData []byte) *DecRe
 	}
 	copy(dr.nonce, nonce)
 	dr.associatedData[0] = 0x00
-	binary.LittleEndian.PutUint32(dr.nonce[dr.cipher.NonceSize()-4:], dr.seqNum)
+	binary.LittleEndian.PutUint32(dr.nonce[dr.cipher.NonceSize()-4:], 0)
 	dr.cipher.Seal(dr.associatedData[1:1], dr.nonce, nil, associatedData)
-	dr.seqNum = 1
 	return dr
 }
 
