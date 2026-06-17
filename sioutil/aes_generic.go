@@ -2,6 +2,7 @@
 // Use of this source code is governed by a license that can be
 // found in the LICENSE file.
 
+//go:build !go1.14 || !ppc64le
 // +build !go1.14 !ppc64le
 
 package sioutil

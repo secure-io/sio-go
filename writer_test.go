@@ -7,7 +7,6 @@ package sio
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"testing"
 )
 
@@ -227,6 +226,61 @@ func TestSimpleReadFrom(t *testing.T) {
 	}
 }
 
+// TestBlockNumDecryptWriter verifies that DecryptWriter with blockNum = t
+// decrypts the ciphertext suffix starting at block t into the plaintext
+// suffix starting at t*bufSize. See blockNumTests in reader_test.go for the
+// semantics of the blockNum parameter.
+func TestBlockNumDecryptWriter(t *testing.T) {
+	for i, tc := range blockNumTests {
+		stream, nonce, ad, plaintext, ciphertext := newBlockNumCase(t, tc)
+
+		blockSize := stream.bufSize + stream.cipher.Overhead()
+		for cipherOff, blk := 0, 0; cipherOff < len(ciphertext); cipherOff, blk = cipherOff+blockSize, blk+1 {
+			plainOff := blk * stream.bufSize
+
+			out := new(bytes.Buffer)
+			dw := stream.DecryptWriter(out, nonce, ad)
+			dw.Reset(uint32(blk))
+			if _, err := dw.Write(ciphertext[cipherOff:]); err != nil {
+				t.Fatalf("Test %d: block %d: failed to write ciphertext: %v", i, blk, err)
+			}
+			if err := dw.Close(); err != nil {
+				t.Fatalf("Test %d: block %d: failed to close: %v", i, blk, err)
+			}
+			if want := plaintext[plainOff:]; !bytes.Equal(out.Bytes(), want) {
+				t.Fatalf("Test %d: block %d: plaintext mismatch: got %d bytes, want %d bytes", i, blk, out.Len(), len(want))
+			}
+		}
+	}
+}
+
+// TestBlockNumEncryptWriter verifies that EncryptWriter with blockNum = t
+// produces exactly the ciphertext suffix starting at block t, i.e. the same
+// bytes a full encryption (blockNum = 0) would emit from block t onwards.
+func TestBlockNumEncryptWriter(t *testing.T) {
+	for i, tc := range blockNumTests {
+		stream, nonce, ad, plaintext, ciphertext := newBlockNumCase(t, tc)
+
+		blockSize := stream.bufSize + stream.cipher.Overhead()
+		for cipherOff, blk := 0, 0; cipherOff < len(ciphertext); cipherOff, blk = cipherOff+blockSize, blk+1 {
+			plainOff := blk * stream.bufSize
+
+			out := new(bytes.Buffer)
+			ew := stream.EncryptWriter(out, nonce, ad)
+			ew.Reset(uint32(blk))
+			if _, err := ew.Write(plaintext[plainOff:]); err != nil {
+				t.Fatalf("Test %d: block %d: failed to write plaintext: %v", i, blk, err)
+			}
+			if err := ew.Close(); err != nil {
+				t.Fatalf("Test %d: block %d: failed to close: %v", i, blk, err)
+			}
+			if want := ciphertext[cipherOff:]; !bytes.Equal(out.Bytes(), want) {
+				t.Fatalf("Test %d: block %d: ciphertext mismatch: got %d bytes, want %d bytes", i, blk, out.Len(), len(want))
+			}
+		}
+	}
+}
+
 func TestWriteAfterClose(t *testing.T) {
 	shouldPanicOnWrite := func(context string, w io.Writer, t *testing.T) {
 		defer func() {
@@ -242,7 +296,7 @@ func TestWriteAfterClose(t *testing.T) {
 		t.Fatalf("Failed to create new Stream: %v", err)
 	}
 	nonce := make([]byte, s.NonceSize())
-	dw := s.DecryptWriter(ioutil.Discard, nonce, nil)
+	dw := s.DecryptWriter(io.Discard, nonce, nil)
 	ew := s.EncryptWriter(dw, nonce, nil)
 	if err := ew.Close(); err != nil {
 		t.Fatalf("Close failed: %v", err)
@@ -267,7 +321,7 @@ func TestWriteByteAfterClose(t *testing.T) {
 		t.Fatalf("Failed to create new Stream: %v", err)
 	}
 	nonce := make([]byte, s.NonceSize())
-	dw := s.DecryptWriter(ioutil.Discard, nonce, nil)
+	dw := s.DecryptWriter(io.Discard, nonce, nil)
 	ew := s.EncryptWriter(dw, nonce, nil)
 	if err := ew.Close(); err != nil {
 		t.Fatalf("Close failed: %v", err)
@@ -291,7 +345,7 @@ func TestReadFromAfterClose(t *testing.T) {
 		t.Fatalf("Failed to create new Stream: %v", err)
 	}
 	nonce := make([]byte, s.NonceSize())
-	dw := s.DecryptWriter(ioutil.Discard, nonce, nil)
+	dw := s.DecryptWriter(io.Discard, nonce, nil)
 	ew := s.EncryptWriter(dw, nonce, nil)
 	if err := ew.Close(); err != nil {
 		t.Fatalf("Close failed: %v", err)

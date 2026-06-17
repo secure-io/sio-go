@@ -8,26 +8,57 @@ on:
     branches:
     - master
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build Go ${{ matrix.go-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go-version: [1.14.x]
+        go-version: [1.26.x]
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-    - name: Set up Go ${{ matrix.go-version }} on ${{ matrix.os }}
-      uses: actions/setup-go@v1
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go ${{ matrix.go-version }}
+      uses: actions/setup-go@v5
       with:
         go-version: ${{ matrix.go-version }}
-      id: go
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v1
+    - name: Vet
+      run: go vet -tags gofuzz ./...
 
-    - name: Build on ${{ matrix.os }}
-      env:
-        GO111MODULE: on
+    - name: Build
+      run: go build -tags gofuzz ./...
+
+    - name: Test
+      run: go test -tags gofuzz ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.26.x
+
+    - name: Check formatting
       run: |
-         go test -tags gofuzz ./...
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "The following files are not gofmt-formatted:"
+          echo "$unformatted"
+          exit 1
+        fi
+
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v7
+      with:
+        version: latest
