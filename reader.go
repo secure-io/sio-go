@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"sync"
+	"sync/atomic"
 )
 
 // An EncReader encrypts and authenticates everything it reads
@@ -23,6 +24,7 @@ type EncReader struct {
 	nonce          []byte
 	associatedData []byte
 
+	ptr              atomic.Pointer[[]byte]
 	buffer           []byte
 	ciphertextBuffer []byte
 	offset           int
@@ -55,7 +57,12 @@ func (r *EncReader) Reset(blockNum uint32) {
 	binary.LittleEndian.PutUint32(r.nonce[len(r.nonce)-4:], 0)
 	r.associatedData[0] = 0x00
 
+	if r.ptr.Load() == nil {
+		r.ptr.Store(alloc(1 + r.bufSize + r.cipher.Overhead()))
+	}
+	r.buffer = *r.ptr.Load()
 	clear(r.buffer)
+	r.ciphertextBuffer = nil
 	r.offset = 0
 
 	r.carry, r.err = 0, nil
@@ -71,6 +78,13 @@ func (r *EncReader) Reset(blockNum uint32) {
 // When Read cannot encrypt any more bytes securely it returns
 // ErrExceeded.
 func (r *EncReader) Read(p []byte) (n int, err error) {
+	if n, err = r.read(p); err != nil {
+		r.free()
+	}
+	return n, err
+}
+
+func (r *EncReader) read(p []byte) (n int, err error) {
 	if r.err != nil {
 		return n, r.err
 	}
@@ -106,6 +120,14 @@ func (r *EncReader) Read(p []byte) (n int, err error) {
 // When ReadByte cannot encrypt one more byte
 // securely it returns ErrExceeded.
 func (r *EncReader) ReadByte() (byte, error) {
+	b, err := r.readByte()
+	if err != nil {
+		r.free()
+	}
+	return b, err
+}
+
+func (r *EncReader) readByte() (byte, error) {
 	if r.err != nil {
 		return 0, r.err
 	}
@@ -145,6 +167,7 @@ func (r *EncReader) ReadByte() (byte, error) {
 // securely it returns ErrExceeded.
 func (r *EncReader) WriteTo(w io.Writer) (int64, error) {
 	var n int64
+	defer r.free()
 	if r.firstRead {
 		r.firstRead = false
 		nn, err := r.readFragment(r.buffer, 0)
@@ -228,6 +251,13 @@ func (r *EncReader) readFragment(p []byte, firstReadOffset int) (int, error) {
 	}
 }
 
+func (r *EncReader) free() {
+	if ptr := r.ptr.Load(); ptr != nil && r.ptr.CompareAndSwap(ptr, nil) {
+		free(ptr)
+		r.buffer, r.ciphertextBuffer = nil, nil
+	}
+}
+
 // A DecReader decrypts and verifies everything it reads
 // from an underlying io.Reader. A DecReader never returns
 // invalid (i.e. not authentic) data.
@@ -240,6 +270,7 @@ type DecReader struct {
 	nonce          []byte
 	associatedData []byte
 
+	ptr             atomic.Pointer[[]byte]
 	buffer          []byte
 	plaintextBuffer []byte
 	offset          int
@@ -267,7 +298,12 @@ func (r *DecReader) Reset(blockNum uint32) {
 	binary.LittleEndian.PutUint32(r.nonce[len(r.nonce)-4:], 0)
 	r.associatedData[0] = 0x00
 
+	if r.ptr.Load() == nil {
+		r.ptr.Store(alloc(1 + r.bufSize + r.cipher.Overhead()))
+	}
+	r.buffer = *r.ptr.Load()
 	clear(r.buffer)
+	r.plaintextBuffer = nil
 	r.offset = 0
 
 	r.carry, r.err = 0, nil
@@ -290,6 +326,13 @@ func (r *DecReader) Reset(blockNum uint32) {
 // encrypted bytes. Therefore, ErrExceeded indicates
 // a misbehaving producer of encrypted data.
 func (r *DecReader) Read(p []byte) (n int, err error) {
+	if n, err = r.read(p); err != nil {
+		r.free()
+	}
+	return n, err
+}
+
+func (r *DecReader) read(p []byte) (n int, err error) {
 	if r.err != nil {
 		return n, r.err
 	}
@@ -333,6 +376,14 @@ func (r *DecReader) Read(p []byte) (n int, err error) {
 // many encrypted bytes. Therefore, ErrExceeded indicates
 // a misbehaving producer of encrypted data.
 func (r *DecReader) ReadByte() (byte, error) {
+	b, err := r.readByte()
+	if err != nil {
+		r.free()
+	}
+	return b, err
+}
+
+func (r *DecReader) readByte() (byte, error) {
 	if r.err != nil {
 		return 0, r.err
 	}
@@ -382,6 +433,8 @@ func (r *DecReader) WriteTo(w io.Writer) (int64, error) {
 	if r.err != nil {
 		return n, r.err
 	}
+
+	defer r.free()
 	if r.firstRead {
 		r.firstRead = false
 		nn, err := r.readFragment(r.buffer, 0)
@@ -480,6 +533,13 @@ func (r *DecReader) readFragment(p []byte, firstReadOffset int) (int, error) {
 	case err != nil:
 		r.err = err
 		return 0, r.err
+	}
+}
+
+func (r *DecReader) free() {
+	if ptr := r.ptr.Load(); ptr != nil && r.ptr.CompareAndSwap(ptr, nil) {
+		free(ptr)
+		r.buffer, r.plaintextBuffer = nil, nil
 	}
 }
 

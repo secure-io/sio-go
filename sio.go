@@ -267,9 +267,11 @@ func (s *Stream) EncryptReader(r io.Reader, nonce, associatedData []byte) *EncRe
 		seqNum:         1,
 		nonce:          make([]byte, s.cipher.NonceSize()),
 		associatedData: make([]byte, 1+s.cipher.Overhead()),
-		buffer:         make([]byte, 1+s.bufSize+s.cipher.Overhead()),
 		firstRead:      true,
 	}
+	er.ptr.Store(alloc(1 + s.bufSize + s.cipher.Overhead()))
+	er.buffer = *(er.ptr.Load())
+
 	copy(er.nonce, nonce)
 	er.associatedData[0] = 0x00
 	binary.LittleEndian.PutUint32(er.nonce[er.cipher.NonceSize()-4:], 0)
@@ -289,6 +291,7 @@ func (s *Stream) DecryptReader(r io.Reader, nonce, associatedData []byte) *DecRe
 	if len(nonce) != s.NonceSize() {
 		panic("sio: nonce has invalid length")
 	}
+
 	dr := &DecReader{
 		r:              r,
 		cipher:         s.cipher,
@@ -296,9 +299,11 @@ func (s *Stream) DecryptReader(r io.Reader, nonce, associatedData []byte) *DecRe
 		seqNum:         1,
 		nonce:          make([]byte, s.cipher.NonceSize()),
 		associatedData: make([]byte, 1+s.cipher.Overhead()),
-		buffer:         make([]byte, 1+s.bufSize+s.cipher.Overhead()),
 		firstRead:      true,
 	}
+	dr.ptr.Store(alloc(1 + s.bufSize + s.cipher.Overhead()))
+	dr.buffer = *(dr.ptr.Load())
+
 	copy(dr.nonce, nonce)
 	dr.associatedData[0] = 0x00
 	binary.LittleEndian.PutUint32(dr.nonce[dr.cipher.NonceSize()-4:], 0)
@@ -332,7 +337,7 @@ func (s *Stream) DecryptReaderAt(r io.ReaderAt, nonce, associatedData []byte) *D
 
 	bufLen := 1 + dr.bufSize + dr.cipher.Overhead()
 	dr.bufPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			b := make([]byte, bufLen)
 			return &b
 		},

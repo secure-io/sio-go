@@ -180,11 +180,7 @@ func benchEncryptRead(b *testing.B, s *Stream, size int64) {
 			}
 		}
 
-		r.seqNum = 1
-		r.offset = 0
-		r.closed = false
-		r.firstRead = true
-		r.associatedData[0] = 0
+		r.Reset(0)
 		plaintext.N = size
 	}
 }
@@ -207,11 +203,8 @@ func benchDecryptRead(b *testing.B, s *Stream, size int64) {
 			}
 		}
 
-		r.seqNum, sr.seqNum = 1, 1
-		r.offset, sr.offset = 0, 0
-		r.closed, sr.closed = false, false
-		r.firstRead, sr.firstRead = true, true
-		r.associatedData[0], sr.associatedData[0] = 0, 0
+		sr.Reset(0)
+		r.Reset(0)
 		plaintext.N = size
 	}
 }
@@ -249,11 +242,7 @@ func benchEncryptWriteTo(b *testing.B, s *Stream, size int64) {
 			panic(err)
 		}
 
-		r.seqNum = 1
-		r.offset = 0
-		r.closed = false
-		r.firstRead = true
-		r.associatedData[0] = 0
+		r.Reset(0)
 		plaintext.N = size
 	}
 }
@@ -271,11 +260,8 @@ func benchDecryptWriteTo(b *testing.B, s *Stream, size int64) {
 			panic(err)
 		}
 
-		r.seqNum, sr.seqNum = 1, 1
-		r.offset, sr.offset = 0, 0
-		r.closed, sr.closed = false, false
-		r.firstRead, sr.firstRead = true, true
-		r.associatedData[0], sr.associatedData[0] = 0, 0
+		sr.Reset(0)
+		r.Reset(0)
 		plaintext.N = size
 	}
 }
